@@ -27,6 +27,16 @@ def test_all_action_td_updates_each_action_without_competitive_pushdown():
     agent.network.reset()
     scores = agent.observe(encoder.encode(observation))
     before = tuple(connection.weight for connection in agent.network._output_connections)
+    decision_state = tuple(agent.network._decision_state)
+
+    expected_errors = []
+    for action, reward in enumerate((0.8, -0.4, 0.2)):
+        current = sum(
+            decision_state[connection.source] * connection.weight
+            for connection in before
+            if connection.target == action
+        )
+        expected_errors.append(max(-1.0, min(1.0, reward - current)))
 
     td_errors = agent.network.learn_td_all_actions(
         rewards=(0.8, -0.4, 0.2),
@@ -37,9 +47,7 @@ def test_all_action_td_updates_each_action_without_competitive_pushdown():
         trace_decay=0.0,
     )
 
-    after = tuple(connection.weight for connection in agent.network._output_connections)
-    assert len(td_errors) == 3
-    assert td_errors == (0.8, -0.4, 0.2)
+    assert td_errors == tuple(expected_errors)
     changed_targets = {
         connection.target
         for old, connection in zip(before, agent.network._output_connections)
