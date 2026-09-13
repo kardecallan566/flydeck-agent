@@ -7,7 +7,6 @@ from .finance_real import split_real_market, train_real_market_v8
 from .finance_real_cli import build_agent
 from .finance_v82 import collect_position_aware_diagnostics
 
-
 HORIZONS = (1, 3, 6, 12, 24)
 ACTION_LABELS = ("HOLD", "BUY", "SELL")
 STATE_LABELS = ("FLAT", "LONG")
@@ -29,15 +28,18 @@ def _print_returns(title: str, values, labels) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="FlyDeck Agent V8.2 position-aware diagnostics")
-    parser.add_argument("--data", required=True)
-    parser.add_argument("--symbol", default="BTCUSDT")
-    parser.add_argument("--interval", default="1h")
-    parser.add_argument("--train-ratio", type=float, default=0.70)
-    parser.add_argument("--validation-ratio", type=float, default=0.15)
-    parser.add_argument("--context", type=int, default=24)
-    parser.add_argument("--seed", type=int, default=42)
-    args = parser.parse_args()
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
+    benchmark = subparsers.add_parser("benchmark", help="train V8 and run position-aware diagnostics")
+    benchmark.add_argument("--data", required=True)
+    benchmark.add_argument("--symbol", default="BTCUSDT")
+    benchmark.add_argument("--interval", default="1h")
+    benchmark.add_argument("--train-ratio", type=float, default=0.70)
+    benchmark.add_argument("--validation-ratio", type=float, default=0.15)
+    benchmark.add_argument("--context", type=int, default=24)
+    benchmark.add_argument("--seed", type=int, default=42)
+
+    args = parser.parse_args()
     dataset = load_ohlcv_csv(args.data, symbol=args.symbol, interval=args.interval)
     splits = split_real_market(
         dataset,
@@ -63,8 +65,7 @@ def main() -> None:
     print("V8.2 position-aware diagnostics:")
     print(f"  decisions: {len(diagnostics.records)}")
     print(f"  FLAT decisions: {diagnostics.flat_records}")
-    print(f"  LONG decisions: {diagnostics.long_records}")
-    print()
+    print(f"  LONG decisions: {diagnostics.long_records}\n")
     _print_matrix("Action transitions:", diagnostics.action_state_transitions, ACTION_LABELS)
     print()
     _print_matrix("Position state transitions:", diagnostics.position_state_transitions, STATE_LABELS)
@@ -80,17 +81,9 @@ def main() -> None:
         print(f"  {label}: {value:+.6f}")
     print()
 
-    _print_returns(
-        "Realized portfolio return by chosen action:",
-        diagnostics.average_realized_portfolio_returns_by_action,
-        ACTION_LABELS,
-    )
+    _print_returns("Realized portfolio return by chosen action:", diagnostics.average_realized_portfolio_returns_by_action, ACTION_LABELS)
     print()
-    _print_returns(
-        "Realized portfolio return by position before action:",
-        diagnostics.average_realized_portfolio_returns_by_position_state,
-        STATE_LABELS,
-    )
+    _print_returns("Realized portfolio return by position before action:", diagnostics.average_realized_portfolio_returns_by_position_state, STATE_LABELS)
     print()
 
     print("Q advantage by position before action:")
