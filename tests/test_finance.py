@@ -2,6 +2,7 @@ import math
 
 from flydeck.agent import Agent
 from flydeck.finance import CryptoTradingEnvironment, SyntheticCryptoMarket
+from flydeck.finance_training import evaluate_synthetic_crypto, train_synthetic_crypto
 
 
 def make_environment(seed: int = 7) -> CryptoTradingEnvironment:
@@ -74,3 +75,50 @@ def test_agent_can_train_on_unpredictable_market() -> None:
     assert result.best_reward >= result.last_reward
     assert math.isfinite(result.average_reward)
     assert math.isfinite(result.best_reward)
+
+
+def test_finance_training_reports_action_distribution() -> None:
+    environment = make_environment(seed=31)
+    agent = Agent(
+        observation_size=environment.observation_size,
+        action_size=environment.action_size,
+        hidden_size=16,
+        density=0.10,
+        learning_rate=0.01,
+        seed=31,
+    )
+
+    result = train_synthetic_crypto(
+        agent,
+        episodes=3,
+        market_length=96,
+        max_steps=40,
+        seed=50,
+        epsilon=0.5,
+        epsilon_decay=0.9,
+        min_epsilon=0.1,
+    )
+
+    assert result.total_actions == result.episodes * 40
+    assert result.total_trades == result.buy_actions + result.sell_actions
+    assert math.isfinite(result.average_return_pct)
+    assert math.isfinite(result.average_drawdown_pct)
+
+
+def test_greedy_evaluation_returns_action_distribution() -> None:
+    environment = make_environment(seed=41)
+    agent = Agent(
+        observation_size=environment.observation_size,
+        action_size=environment.action_size,
+        hidden_size=16,
+        density=0.10,
+        learning_rate=0.01,
+        seed=41,
+    )
+
+    result = evaluate_synthetic_crypto(agent, seed=9_999, market_length=96, max_steps=40)
+
+    assert result.total_actions == 40
+    assert result.trades == result.buy_actions + result.sell_actions
+    assert math.isfinite(result.return_pct)
+    assert math.isfinite(result.max_drawdown_pct)
