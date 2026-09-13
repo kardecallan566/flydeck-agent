@@ -37,6 +37,8 @@ class Agent:
         memory_capacity: int = 256,
         learning_rate: float = 0.02,
         seed: int = 42,
+        input_plasticity: float = 0.0,
+        recurrent_plasticity: float = 0.0,
     ) -> None:
         self.network = SparseNetwork(
             observation_size,
@@ -44,6 +46,8 @@ class Agent:
             action_size,
             density=density,
             seed=seed,
+            input_plasticity=input_plasticity,
+            recurrent_plasticity=recurrent_plasticity,
         )
         self.memory = Memory(memory_capacity)
         self.learning_rate = learning_rate
@@ -56,9 +60,7 @@ class Agent:
     def choose_action(self, scores: tuple[float, ...]) -> int:
         return max(range(len(scores)), key=scores.__getitem__)
 
-    def choose_action_epsilon_greedy(
-        self, scores: tuple[float, ...], epsilon: float
-    ) -> int:
+    def choose_action_epsilon_greedy(self, scores: tuple[float, ...], epsilon: float) -> int:
         if not 0.0 <= epsilon <= 1.0:
             raise ValueError("epsilon must be between 0 and 1")
         if self._rng.random() < epsilon:
@@ -68,9 +70,7 @@ class Agent:
     def act(self, observation: tuple[float, ...]) -> int:
         return self.choose_action(self.observe(observation))
 
-    def act_epsilon_greedy(
-        self, observation: tuple[float, ...], epsilon: float
-    ) -> int:
+    def act_epsilon_greedy(self, observation: tuple[float, ...], epsilon: float) -> int:
         return self.choose_action_epsilon_greedy(self.observe(observation), epsilon)
 
     def run(self, environment: Environment, max_steps: int = 100) -> AgentResult:
@@ -104,13 +104,7 @@ class Agent:
         current_epsilon = epsilon
 
         for _ in range(episodes):
-            result = self._run_episode(
-                environment,
-                max_steps=max_steps,
-                epsilon=current_epsilon,
-                discount=discount,
-                trace_decay=trace_decay,
-            )
+            result = self._run_episode(environment, max_steps=max_steps, epsilon=current_epsilon, discount=discount, trace_decay=trace_decay)
             rewards.append(result.total_reward)
             if result.total_reward >= 10.0:
                 successful += 1
@@ -124,14 +118,7 @@ class Agent:
             successful_episodes=successful,
         )
 
-    def _run_episode(
-        self,
-        environment: Environment,
-        max_steps: int,
-        epsilon: float,
-        discount: float = 0.97,
-        trace_decay: float = 0.85,
-    ) -> AgentResult:
+    def _run_episode(self, environment: Environment, max_steps: int, epsilon: float, discount: float = 0.97, trace_decay: float = 0.85) -> AgentResult:
         if max_steps < 1:
             raise ValueError("max_steps must be >= 1")
 
@@ -150,15 +137,7 @@ class Agent:
                 next_scores = (0.0,) * self.network.output_size
             else:
                 next_scores = self.observe(result.observation)
-            self.network.learn_td(
-                action,
-                result.reward,
-                next_scores,
-                result.done,
-                self.learning_rate,
-                discount,
-                trace_decay,
-            )
+            self.network.learn_td(action, result.reward, next_scores, result.done, self.learning_rate, discount, trace_decay)
 
             total_reward += result.reward
             steps += 1
