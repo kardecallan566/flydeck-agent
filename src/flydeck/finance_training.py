@@ -20,6 +20,8 @@ class FinanceTrainingResult:
     buy_actions: int
     sell_actions: int
     gated_hold_actions: int = 0
+    average_confidence: float = 0.0
+    median_confidence: float = 0.0
 
     @property
     def total_actions(self) -> int:
@@ -28,6 +30,10 @@ class FinanceTrainingResult:
     @property
     def trade_frequency(self) -> float:
         return self.total_trades / max(1, self.total_actions)
+
+    @property
+    def gate_activation_rate(self) -> float:
+        return self.gated_hold_actions / max(1, self.total_actions)
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +46,8 @@ class FinanceEvaluationResult:
     buy_actions: int
     sell_actions: int
     gated_hold_actions: int = 0
+    average_confidence: float = 0.0
+    median_confidence: float = 0.0
 
     @property
     def total_actions(self) -> int:
@@ -48,6 +56,10 @@ class FinanceEvaluationResult:
     @property
     def trade_frequency(self) -> float:
         return self.trades / max(1, self.total_actions)
+
+    @property
+    def gate_activation_rate(self) -> float:
+        return self.gated_hold_actions / max(1, self.total_actions)
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +83,8 @@ class FinanceMultiMarketResult:
     average_excess_return_pct: float
     hold_average_return_pct: float
     buy_hold_average_return_pct: float
+    average_confidence: float = 0.0
+    gate_activation_rate: float = 0.0
 
 
 def _run_policy(candles: tuple, policy, max_steps: int) -> FinanceBaselineResult:
@@ -118,23 +132,56 @@ def _observe_finance(agent: Agent, encoder: SparseMarketEncoder | None, observat
     return agent.observe(encoded)
 
 
+def _gate_decision(
+    scores: tuple[float, ...],
+    opportunity_margin: float,
+    confidence_threshold: float,
+) -> tuple[bool, float, float]:
+    """Return whether to gate, normalized confidence, and adaptive margin.
+
+    The old V6 gate used one absolute margin. That worked as a brake but became
+    too conservative when the recurrent output scores were small. V6.1 scales
+    the margin with the current score range and also requires the best trade to
+    have a meaningful share of the available directional separation.
+    """
+    if len(scores) != 3:
+        raise ValueError("finance action scores must contain HOLD, BUY and SELL")
+    if opportunity_margin < 0:
+        raise ValueError("opportunity_margin must be >= 0")
+    if not 0.0 <= confidence_threshold <= 1.0:
+        raise ValueError("confidence_threshold must be between 0 and 1")
+
+    best_trade = max(scores[1:])
+    second_trade = min(scores[1:])
+    score_range = max(scores) - min(scores)
+    trade_advantage = best_trade - scores[0]
+
+    # Keep a small absolute floor to avoid trading on numerical noise, while
+    # allowing the threshold to shrink when the entire circuit is near zero.
+    adaptive_margin = max(0.005, min(opportunity_margin, score_range * 0.25))
+    directional_span = max(1e-9, best_trade - second_trade)
+    confidence = max(0.0, min(1.0, trade_advantage / max(1e-9, score_range)))
+    direction_confidence = max(0.0, min(1.0, trade_advantage / directional_span))
+
+    gated = (
+        trade_advantage <= adaptive_margin
+        or confidence < confidence_threshold
+        or direction_confidence < confidence_threshold
+    )
+    return gated, confidence, adaptive_margin
+
+
 def _choose_finance_action(
     agent: Agent,
     scores: tuple[float, ...],
     opportunity_margin: float,
-) -> tuple[int, bool]:
-    """Use HOLD as a learned no-trade zone around the best trade score.
-
-    This is deliberately a small gate rather than a second neural network. The
-    output circuit still decides direction, while the margin prevents tiny score
-    differences from becoming unnecessary trades.
-    """
-    if len(scores) != 3:
-        raise ValueError("finance action scores must contain HOLD, BUY and SELL")
-    best_trade = max(scores[1:])
-    if best_trade <= scores[0] + opportunity_margin:
-        return 0, True
-    return agent.choose_action(scores), False
+    confidence_threshold: float = 0.20,
+) -> tuple[int, bool, float]:
+    """Use an adaptive HOLD zone while retaining the network's direction choice."""
+    gated, confidence, _adaptive_margin = _gate_decision(scores, opportunity_margin, confidence_threshold)
+    if gated:
+        return 0, True, confidence
+    return agent.choose_action(scores), False, confidence
 
 
 def train_synthetic_crypto(
@@ -152,6 +199,7 @@ def train_synthetic_crypto(
     discount: float = 0.97,
     trace_decay: float = 0.85,
     opportunity_margin: float = 0.08,
+    confidence_threshold: float = 0.20,
 ) -> FinanceTrainingResult:
     """Train across generated markets using sparse coding, TD learning and traces."""
     if episodes < 1 or market_length < 32 or max_steps < 1:
@@ -162,8 +210,10 @@ def train_synthetic_crypto(
         raise ValueError("invalid TD configuration")
     if opportunity_margin < 0:
         raise ValueError("opportunity_margin must be >= 0")
+    if not 0.0 <= confidence_threshold <= 1.0:
+        raise ValueError("confidence_threshold must be between 0 and 1")
 
-    returns, drawdowns = [], []
+    returns, drawdowns, confidences = [], [], []
     total_trades, action_counts, gated_holds = 0, [0, 0, 0], 0
     current_epsilon = epsilon
     encoder = _make_encoder(agent)
@@ -188,8 +238,12 @@ def train_synthetic_crypto(
             if agent._rng.random() < current_epsilon:
                 action = agent._rng.randrange(3)
                 gated = False
+                confidence = 0.0
             else:
-                action, gated = _choose_finance_action(agent, scores, opportunity_margin)
+                action, gated, confidence = _choose_finance_action(
+                    agent, scores, opportunity_margin, confidence_threshold
+                )
+            confidences.append(confidence)
             if gated:
                 gated_holds += 1
             action_counts[action] += 1
@@ -235,6 +289,8 @@ def train_synthetic_crypto(
         action_counts[1],
         action_counts[2],
         gated_holds,
+        sum(confidences) / len(confidences),
+        median(confidences),
     )
 
 
@@ -247,6 +303,7 @@ def evaluate_synthetic_crypto(
     invalid_action_penalty: float = 0.001,
     drawdown_penalty: float = 0.02,
     opportunity_margin: float = 0.08,
+    confidence_threshold: float = 0.20,
 ) -> FinanceEvaluationResult:
     """Evaluate greedily on a fresh market without changing agent weights."""
     candles = SyntheticCryptoMarket(length=market_length, seed=seed).generate()
@@ -266,9 +323,13 @@ def evaluate_synthetic_crypto(
     total_reward = 0.0
     action_counts = [0, 0, 0]
     gated_holds = 0
+    confidences: list[float] = []
 
     for _ in range(max_steps):
-        action, gated = _choose_finance_action(agent, scores, opportunity_margin)
+        action, gated, confidence = _choose_finance_action(
+            agent, scores, opportunity_margin, confidence_threshold
+        )
+        confidences.append(confidence)
         if gated:
             gated_holds += 1
         action_counts[action] += 1
@@ -291,6 +352,8 @@ def evaluate_synthetic_crypto(
         action_counts[1],
         action_counts[2],
         gated_holds,
+        sum(confidences) / len(confidences),
+        median(confidences),
     )
 
 
@@ -304,6 +367,7 @@ def evaluate_synthetic_crypto_multi_market(
     invalid_action_penalty: float = 0.001,
     drawdown_penalty: float = 0.02,
     opportunity_margin: float = 0.08,
+    confidence_threshold: float = 0.20,
 ) -> FinanceMultiMarketResult:
     """Evaluate the same policy across many unseen markets and baselines."""
     if markets < 1:
@@ -313,6 +377,9 @@ def evaluate_synthetic_crypto_multi_market(
     drawdowns: list[float] = []
     trades: list[int] = []
     trade_frequencies: list[float] = []
+    confidences: list[float] = []
+    gated_holds = 0
+    total_actions = 0
     hold_returns: list[float] = []
     buy_hold_returns: list[float] = []
     wins = 0
@@ -327,6 +394,7 @@ def evaluate_synthetic_crypto_multi_market(
             invalid_action_penalty=invalid_action_penalty,
             drawdown_penalty=drawdown_penalty,
             opportunity_margin=opportunity_margin,
+            confidence_threshold=confidence_threshold,
         )
         hold = evaluate_hold(seed=market_seed, market_length=market_length, max_steps=max_steps)
         buy_hold = evaluate_buy_and_hold(seed=market_seed, market_length=market_length, max_steps=max_steps)
@@ -335,6 +403,9 @@ def evaluate_synthetic_crypto_multi_market(
         drawdowns.append(evaluation.max_drawdown_pct)
         trades.append(evaluation.trades)
         trade_frequencies.append(evaluation.trade_frequency)
+        confidences.append(evaluation.average_confidence)
+        gated_holds += evaluation.gated_hold_actions
+        total_actions += evaluation.total_actions
         hold_returns.append(hold.return_pct)
         buy_hold_returns.append(buy_hold.return_pct)
         wins += evaluation.return_pct > buy_hold.return_pct
@@ -353,4 +424,6 @@ def evaluate_synthetic_crypto_multi_market(
         ) / markets,
         hold_average_return_pct=sum(hold_returns) / markets,
         buy_hold_average_return_pct=sum(buy_hold_returns) / markets,
+        average_confidence=sum(confidences) / markets,
+        gate_activation_rate=gated_holds / max(1, total_actions),
     )
