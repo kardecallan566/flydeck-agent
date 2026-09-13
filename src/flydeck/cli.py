@@ -3,6 +3,7 @@ from __future__ import annotations
 from .agent import Agent
 from .environment import CounterEnvironment
 from .finance import CryptoTradingEnvironment, SyntheticCryptoMarket
+from .finance_encoder import SparseMarketEncoder
 from .finance_training import (
     evaluate_buy_and_hold,
     evaluate_hold,
@@ -15,8 +16,9 @@ from .navigation import GridNavigationEnvironment
 
 def main() -> None:
     environment = CryptoTradingEnvironment(SyntheticCryptoMarket(length=256, seed=42).generate(), max_steps=200)
+    encoder = SparseMarketEncoder(feature_count=environment.observation_size, winners=4)
     agent = Agent(
-        observation_size=environment.observation_size,
+        observation_size=encoder.output_size,
         action_size=environment.action_size,
         hidden_size=32,
         density=0.10,
@@ -24,10 +26,14 @@ def main() -> None:
         seed=42,
     )
 
-    print("FlyDeck Agent - Synthetic Crypto V5")
-    print("learning: sparse TD + eligibility traces")
-    print(f"observations: {environment.observation_size}")
+    opportunity_margin = 0.08
+    print("FlyDeck Agent - Synthetic Crypto V6")
+    print("learning: sparse k-WTA state + recurrent circuit + TD(lambda)")
+    print("decision: opportunity gate + BUY / SELL / HOLD")
+    print(f"market features: {environment.observation_size}")
+    print(f"sparse state: {encoder.output_size} units | {encoder.active_units} active ({encoder.sparsity:.1%})")
     print("actions: HOLD / BUY / SELL")
+    print(f"opportunity margin: {opportunity_margin:.3f}")
     print(f"connections: {agent.network.connection_count}")
     print()
 
@@ -35,7 +41,7 @@ def main() -> None:
         agent, episodes=100, market_length=256, max_steps=200, seed=100,
         epsilon=0.35, epsilon_decay=0.99, min_epsilon=0.05,
         trade_penalty=0.0025, invalid_action_penalty=0.001, drawdown_penalty=0.02,
-        discount=0.97, trace_decay=0.85,
+        discount=0.97, trace_decay=0.85, opportunity_margin=opportunity_margin,
     )
 
     print(f"episodes: {training.episodes}")
@@ -45,6 +51,7 @@ def main() -> None:
     print(f"average drawdown: {training.average_drawdown_pct:.3f}%")
     print(f"trades: {training.total_trades}")
     print(f"trade frequency: {training.trade_frequency:.3f}")
+    print(f"gated HOLD decisions: {training.gated_hold_actions}")
     print("training actions:")
     print(f"  HOLD: {training.hold_actions}")
     print(f"  BUY:  {training.buy_actions}")
@@ -54,6 +61,7 @@ def main() -> None:
     evaluation = evaluate_synthetic_crypto(
         agent, seed=evaluation_seed, market_length=256, max_steps=200,
         trade_penalty=0.0025, invalid_action_penalty=0.001, drawdown_penalty=0.02,
+        opportunity_margin=opportunity_margin,
     )
     hold = evaluate_hold(seed=evaluation_seed, market_length=256, max_steps=200)
     buy_hold = evaluate_buy_and_hold(seed=evaluation_seed, market_length=256, max_steps=200)
@@ -65,6 +73,7 @@ def main() -> None:
     print(f"agent drawdown: {evaluation.max_drawdown_pct:.3f}%")
     print(f"agent trades: {evaluation.trades}")
     print(f"agent trade frequency: {evaluation.trade_frequency:.3f}")
+    print(f"gated HOLD decisions: {evaluation.gated_hold_actions}")
     print("agent actions:")
     print(f"  HOLD: {evaluation.hold_actions}")
     print(f"  BUY:  {evaluation.buy_actions}")
@@ -77,6 +86,7 @@ def main() -> None:
     multi = evaluate_synthetic_crypto_multi_market(
         agent, seed=20_000, markets=20, market_length=256, max_steps=200,
         trade_penalty=0.0025, invalid_action_penalty=0.001, drawdown_penalty=0.02,
+        opportunity_margin=opportunity_margin,
     )
     print()
     print("Multi-market evaluation:")
