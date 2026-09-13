@@ -26,7 +26,7 @@ def test_all_action_td_updates_each_action_without_competitive_pushdown():
     observation = (0.1,) * 12
     agent.network.reset()
     scores = agent.observe(encoder.encode(observation))
-    before = tuple(connection.weight for connection in agent.network._output_connections)
+    before = tuple(agent.network._output_connections)
     decision_state = tuple(agent.network._decision_state)
 
     expected_errors = []
@@ -51,7 +51,7 @@ def test_all_action_td_updates_each_action_without_competitive_pushdown():
     changed_targets = {
         connection.target
         for old, connection in zip(before, agent.network._output_connections)
-        if old != connection.weight
+        if old.weight != connection.weight
     }
     assert changed_targets == {0, 1, 2}
     assert scores != ()
