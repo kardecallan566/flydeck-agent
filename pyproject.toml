@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flydeck-agent"
+version = "0.1.0"
+description = "Lightweight agent runtime for efficient computation"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+flydeck = "flydeck.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+addopts = "-q"
+
+[tool.setuptools.packages.find]
+where = ["src"]
