@@ -1,3 +1,5 @@
+import math
+
 from flydeck.agent import Agent
 from flydeck.finance import CryptoTradingEnvironment, SyntheticCryptoMarket
 
@@ -70,6 +72,5 @@ def test_agent_can_train_on_unpredictable_market() -> None:
 
     assert result.episodes == 5
     assert result.best_reward >= result.last_reward
-    assert result.average_reward == sum(
-        [result.average_reward]
-    )  # result is finite and exposes the aggregate metric
+    assert math.isfinite(result.average_reward)
+    assert math.isfinite(result.best_reward)
