@@ -40,13 +40,13 @@ def test_position_diagnostics_expose_portfolio_outcomes_at_horizons():
 
 def test_position_diagnostics_does_not_update_network_weights():
     agent = _agent()
-    before_input = tuple(connection.weight for connection in agent.network.input_connections)
-    before_recurrent = tuple(connection.weight for connection in agent.network.recurrent_connections)
-    before_output = tuple(connection.weight for connection in agent.network.output_connections)
+    before_input = tuple(connection.weight for connection in agent.network._input_connections)
+    before_recurrent = tuple(connection.weight for connection in agent.network._recurrent_connections)
+    before_output = tuple(connection.weight for connection in agent.network._output_connections)
     collect_position_aware_diagnostics(agent, _candles(), max_steps=20)
-    assert before_input == tuple(connection.weight for connection in agent.network.input_connections)
-    assert before_recurrent == tuple(connection.weight for connection in agent.network.recurrent_connections)
-    assert before_output == tuple(connection.weight for connection in agent.network.output_connections)
+    assert before_input == tuple(connection.weight for connection in agent.network._input_connections)
+    assert before_recurrent == tuple(connection.weight for connection in agent.network._recurrent_connections)
+    assert before_output == tuple(connection.weight for connection in agent.network._output_connections)
 
 
 def test_counterfactuals_share_the_same_pre_action_state():
