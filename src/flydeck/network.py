@@ -149,55 +149,64 @@ class SparseNetwork:
             competitive=False,
         )
 
-    def _learn_td(
+    def learn_td_all_actions(
         self,
-        action: int,
-        reward: float,
-        next_scores: tuple[float, ...],
-        done: bool,
-        learning_rate: float,
-        discount: float,
-        trace_decay: float,
-        competitive: bool,
-    ) -> float:
-        if not 0 <= action < self.output_size:
-            raise ValueError("action is outside the output range")
-        if len(next_scores) != self.output_size:
-            raise ValueError("next_scores size does not match network output")
+        rewards: tuple[float, ...],
+        next_scores_by_action: tuple[tuple[float, ...], ...],
+        done_by_action: tuple[bool, ...],
+        learning_rate: float = 0.005,
+        discount: float = 0.97,
+        trace_decay: float = 0.85,
+    ) -> tuple[float, ...]:
+        """Learn one independent TD target for every action.
+
+        Each action must provide the reward and value estimates for the state
+        reached by taking that action. Unlike the legacy competitive update,
+        actions are never pushed down merely because another action was chosen.
+        This is the V8.3 all-action causal experiment.
+        """
+        if len(rewards) != self.output_size:
+            raise ValueError("rewards size does not match network output")
+        if len(next_scores_by_action) != self.output_size:
+            raise ValueError("next_scores_by_action size does not match network output")
+        if len(done_by_action) != self.output_size:
+            raise ValueError("done_by_action size does not match network output")
         if learning_rate <= 0 or not 0.0 < discount <= 1.0:
             raise ValueError("learning_rate must be > 0 and discount must be in (0, 1]")
         if not 0.0 <= trace_decay <= 1.0:
             raise ValueError("trace_decay must be between 0 and 1")
+        if any(len(scores) != self.output_size for scores in next_scores_by_action):
+            raise ValueError("each next score vector must match network output")
 
-        decision_state = self._decision_state if done else self._previous_decision_state
-        bootstrap = 0.0 if done else max(next_scores)
-        current = 0.0
-        for connection in self._output_connections:
-            if connection.target == action:
-                current += decision_state[connection.source] * connection.weight
-        td_error = reward + discount * bootstrap - current
-        td_error = max(-1.0, min(1.0, td_error))
-
+        decay = discount * trace_decay
+        decision_state = self._decision_state
+        td_errors: list[float] = []
         updated: list[Connection] = []
         new_eligibility: list[float] = []
-        competitor_scale = 1.0 / max(self.output_size - 1, 1)
-        decay = discount * trace_decay
+
+        for action in range(self.output_size):
+            current = sum(
+                decision_state[connection.source] * connection.weight
+                for connection in self._output_connections
+                if connection.target == action
+            )
+            bootstrap = 0.0 if done_by_action[action] else max(next_scores_by_action[action])
+            td_error = rewards[action] + discount * bootstrap - current
+            td_error = max(-1.0, min(1.0, td_error))
+            td_errors.append(td_error)
 
         for index, connection in enumerate(self._output_connections):
             activation = decision_state[connection.source]
-            if competitive:
-                direction = 1.0 if connection.target == action else -competitor_scale
-            else:
-                direction = 1.0 if connection.target == action else 0.0
-            trace = decay * self._eligibility[index] + activation * direction
-            weight = connection.weight + learning_rate * td_error * trace
+            action = connection.target
+            trace = decay * self._eligibility[index] + activation
+            weight = connection.weight + learning_rate * td_errors[action] * trace
             weight = max(-2.0, min(2.0, weight))
             updated.append(Connection(connection.source, connection.target, weight))
             new_eligibility.append(trace)
 
         self._output_connections = updated
         self._eligibility = new_eligibility
-        return td_error
+        return tuple(td_errors)
 
     def reset(self) -> None:
         self._state = [0.0] * self.hidden_size
