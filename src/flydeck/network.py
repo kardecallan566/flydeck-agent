@@ -66,8 +66,6 @@ class SparseNetwork:
         if len(observation) != self.input_size:
             raise ValueError("observation size does not match network input")
 
-        # Preserve the state that generated the previous action before advancing
-        # the recurrent circuit to the next observation.
         self._previous_decision_state = list(self._decision_state)
 
         next_state = [0.0] * self.hidden_size
@@ -111,7 +109,57 @@ class SparseNetwork:
         discount: float = 0.97,
         trace_decay: float = 0.85,
     ) -> float:
-        """Learn from TD error using sparse eligibility traces."""
+        """Learn TD(lambda) with the legacy competitive output update."""
+        return self._learn_td(
+            action,
+            reward,
+            next_scores,
+            done,
+            learning_rate,
+            discount,
+            trace_decay,
+            competitive=True,
+        )
+
+    def learn_td_selected_action(
+        self,
+        action: int,
+        reward: float,
+        next_scores: tuple[float, ...],
+        done: bool,
+        learning_rate: float = 0.005,
+        discount: float = 0.97,
+        trace_decay: float = 0.85,
+    ) -> float:
+        """Learn TD(lambda) while updating only the selected action value.
+
+        Unlike the legacy competitive rule, this does not explicitly push the
+        unselected action values downward. This isolates action-value credit
+        assignment as the V8 causal experiment while keeping the rest of the
+        network unchanged.
+        """
+        return self._learn_td(
+            action,
+            reward,
+            next_scores,
+            done,
+            learning_rate,
+            discount,
+            trace_decay,
+            competitive=False,
+        )
+
+    def _learn_td(
+        self,
+        action: int,
+        reward: float,
+        next_scores: tuple[float, ...],
+        done: bool,
+        learning_rate: float,
+        discount: float,
+        trace_decay: float,
+        competitive: bool,
+    ) -> float:
         if not 0 <= action < self.output_size:
             raise ValueError("action is outside the output range")
         if len(next_scores) != self.output_size:
@@ -121,9 +169,6 @@ class SparseNetwork:
         if not 0.0 <= trace_decay <= 1.0:
             raise ValueError("trace_decay must be between 0 and 1")
 
-        # For non-terminal transitions, step() has already advanced to s(t+1),
-        # so use the preserved state that generated a(t). At a terminal transition
-        # no next step exists and the current decision state is still the right one.
         decision_state = self._decision_state if done else self._previous_decision_state
         bootstrap = 0.0 if done else max(next_scores)
         current = 0.0
@@ -140,7 +185,10 @@ class SparseNetwork:
 
         for index, connection in enumerate(self._output_connections):
             activation = decision_state[connection.source]
-            direction = 1.0 if connection.target == action else -competitor_scale
+            if competitive:
+                direction = 1.0 if connection.target == action else -competitor_scale
+            else:
+                direction = 1.0 if connection.target == action else 0.0
             trace = decay * self._eligibility[index] + activation * direction
             weight = connection.weight + learning_rate * td_error * trace
             weight = max(-2.0, min(2.0, weight))
