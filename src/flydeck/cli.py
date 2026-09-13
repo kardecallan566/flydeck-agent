@@ -7,6 +7,7 @@ from .finance_training import (
     evaluate_buy_and_hold,
     evaluate_hold,
     evaluate_synthetic_crypto,
+    evaluate_synthetic_crypto_multi_market,
     train_synthetic_crypto,
 )
 from .navigation import GridNavigationEnvironment
@@ -19,27 +20,22 @@ def main() -> None:
         action_size=environment.action_size,
         hidden_size=32,
         density=0.10,
-        learning_rate=0.01,
+        learning_rate=0.005,
         seed=42,
     )
 
-    print("FlyDeck Agent - Synthetic Crypto")
+    print("FlyDeck Agent - Synthetic Crypto V5")
+    print("learning: sparse TD + eligibility traces")
     print(f"observations: {environment.observation_size}")
     print("actions: HOLD / BUY / SELL")
     print(f"connections: {agent.network.connection_count}")
     print()
 
     training = train_synthetic_crypto(
-        agent,
-        episodes=100,
-        market_length=256,
-        max_steps=200,
-        seed=100,
-        epsilon=0.35,
-        epsilon_decay=0.99,
-        min_epsilon=0.05,
-        trade_penalty=0.0005,
-        drawdown_penalty=0.02,
+        agent, episodes=100, market_length=256, max_steps=200, seed=100,
+        epsilon=0.35, epsilon_decay=0.99, min_epsilon=0.05,
+        trade_penalty=0.0025, invalid_action_penalty=0.001, drawdown_penalty=0.02,
+        discount=0.97, trace_decay=0.85,
     )
 
     print(f"episodes: {training.episodes}")
@@ -48,6 +44,7 @@ def main() -> None:
     print(f"last return: {training.last_return_pct:.3f}%")
     print(f"average drawdown: {training.average_drawdown_pct:.3f}%")
     print(f"trades: {training.total_trades}")
+    print(f"trade frequency: {training.trade_frequency:.3f}")
     print("training actions:")
     print(f"  HOLD: {training.hold_actions}")
     print(f"  BUY:  {training.buy_actions}")
@@ -55,12 +52,8 @@ def main() -> None:
 
     evaluation_seed = 10_000
     evaluation = evaluate_synthetic_crypto(
-        agent,
-        seed=evaluation_seed,
-        market_length=256,
-        max_steps=200,
-        trade_penalty=0.0005,
-        drawdown_penalty=0.02,
+        agent, seed=evaluation_seed, market_length=256, max_steps=200,
+        trade_penalty=0.0025, invalid_action_penalty=0.001, drawdown_penalty=0.02,
     )
     hold = evaluate_hold(seed=evaluation_seed, market_length=256, max_steps=200)
     buy_hold = evaluate_buy_and_hold(seed=evaluation_seed, market_length=256, max_steps=200)
@@ -71,6 +64,7 @@ def main() -> None:
     print(f"agent portfolio: {evaluation.final_portfolio:.2f}")
     print(f"agent drawdown: {evaluation.max_drawdown_pct:.3f}%")
     print(f"agent trades: {evaluation.trades}")
+    print(f"agent trade frequency: {evaluation.trade_frequency:.3f}")
     print("agent actions:")
     print(f"  HOLD: {evaluation.hold_actions}")
     print(f"  BUY:  {evaluation.buy_actions}")
@@ -79,6 +73,23 @@ def main() -> None:
     print("Baselines on the same unseen market:")
     print(f"  HOLD:      {hold.return_pct:.3f}% | drawdown {hold.max_drawdown_pct:.3f}% | trades {hold.trades}")
     print(f"  BUY&HOLD:  {buy_hold.return_pct:.3f}% | drawdown {buy_hold.max_drawdown_pct:.3f}% | trades {buy_hold.trades}")
+
+    multi = evaluate_synthetic_crypto_multi_market(
+        agent, seed=20_000, markets=20, market_length=256, max_steps=200,
+        trade_penalty=0.0025, invalid_action_penalty=0.001, drawdown_penalty=0.02,
+    )
+    print()
+    print("Multi-market evaluation:")
+    print(f"markets: {multi.markets}")
+    print(f"agent average return: {multi.average_return_pct:.3f}%")
+    print(f"agent median return: {multi.median_return_pct:.3f}%")
+    print(f"agent average drawdown: {multi.average_drawdown_pct:.3f}%")
+    print(f"agent average trades: {multi.average_trades:.2f}")
+    print(f"agent average trade frequency: {multi.average_trade_frequency:.3f}")
+    print(f"vs BUY&HOLD win rate: {multi.win_rate_vs_buy_hold:.1%}")
+    print(f"vs BUY&HOLD excess return: {multi.average_excess_return_pct:.3f}%")
+    print(f"HOLD average return: {multi.hold_average_return_pct:.3f}%")
+    print(f"BUY&HOLD average return: {multi.buy_hold_average_return_pct:.3f}%")
     print()
     print(f"connections: {agent.network.connection_count}")
     print(f"memory: {len(agent.memory)}")
