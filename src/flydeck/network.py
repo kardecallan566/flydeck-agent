@@ -47,6 +47,14 @@ class SparseNetwork:
             for target in range(target_size):
                 if rng.random() <= density:
                     connections.append(Connection(source, target, rng.uniform(-1.0, 1.0)))
+
+        # Every target needs at least one incoming connection so an action cannot
+        # become permanently unreachable just because of a sparse random draw.
+        connected_targets = {connection.target for connection in connections}
+        for target in range(target_size):
+            if target not in connected_targets:
+                source = rng.randrange(source_size)
+                connections.append(Connection(source, target, rng.uniform(-1.0, 1.0)))
         return connections
 
     @staticmethod
@@ -71,20 +79,25 @@ class SparseNetwork:
         return tuple(output)
 
     def learn(self, action: int, reward: float, learning_rate: float = 0.02) -> None:
-        """Reinforce the active output pathway using the latest hidden state."""
+        """Use reward to reinforce the chosen action and contrast it with alternatives.
+
+        Positive reward strengthens the selected output while slightly suppressing
+        competing outputs. Negative reward does the opposite. This keeps learning
+        directional instead of only changing the action that happened to be chosen.
+        """
         if not 0 <= action < self.output_size:
             raise ValueError("action is outside the output range")
         if learning_rate <= 0:
             raise ValueError("learning_rate must be > 0")
 
+        competitor_scale = 1.0 / max(self.output_size - 1, 1)
         updated: list[Connection] = []
         for connection in self._output_connections:
-            if connection.target == action:
-                weight = connection.weight + learning_rate * reward * self._state[connection.source]
-                weight = max(-2.0, min(2.0, weight))
-                updated.append(Connection(connection.source, connection.target, weight))
-            else:
-                updated.append(connection)
+            activation = self._state[connection.source]
+            direction = 1.0 if connection.target == action else -competitor_scale
+            weight = connection.weight + learning_rate * reward * activation * direction
+            weight = max(-2.0, min(2.0, weight))
+            updated.append(Connection(connection.source, connection.target, weight))
         self._output_connections = updated
 
     def reset(self) -> None:
