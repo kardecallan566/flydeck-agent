@@ -27,13 +27,15 @@ def main() -> None:
     )
 
     opportunity_margin = 0.08
-    print("FlyDeck Agent - Synthetic Crypto V6")
+    confidence_threshold = 0.20
+    print("FlyDeck Agent - Synthetic Crypto V6.1")
     print("learning: sparse k-WTA state + recurrent circuit + TD(lambda)")
-    print("decision: opportunity gate + BUY / SELL / HOLD")
+    print("decision: adaptive opportunity gate + BUY / SELL / HOLD")
     print(f"market features: {environment.observation_size}")
     print(f"sparse state: {encoder.output_size} units | {encoder.active_units} active ({encoder.sparsity:.1%})")
     print("actions: HOLD / BUY / SELL")
-    print(f"opportunity margin: {opportunity_margin:.3f}")
+    print(f"max opportunity margin: {opportunity_margin:.3f}")
+    print(f"confidence threshold: {confidence_threshold:.2f}")
     print(f"connections: {agent.network.connection_count}")
     print()
 
@@ -41,7 +43,9 @@ def main() -> None:
         agent, episodes=100, market_length=256, max_steps=200, seed=100,
         epsilon=0.35, epsilon_decay=0.99, min_epsilon=0.05,
         trade_penalty=0.0025, invalid_action_penalty=0.001, drawdown_penalty=0.02,
-        discount=0.97, trace_decay=0.85, opportunity_margin=opportunity_margin,
+        discount=0.97, trace_decay=0.85,
+        opportunity_margin=opportunity_margin,
+        confidence_threshold=confidence_threshold,
     )
 
     print(f"episodes: {training.episodes}")
@@ -51,6 +55,9 @@ def main() -> None:
     print(f"average drawdown: {training.average_drawdown_pct:.3f}%")
     print(f"trades: {training.total_trades}")
     print(f"trade frequency: {training.trade_frequency:.3f}")
+    print(f"gate activation rate: {training.gate_activation_rate:.1%}")
+    print(f"average confidence: {training.average_confidence:.3f}")
+    print(f"median confidence: {training.median_confidence:.3f}")
     print(f"gated HOLD decisions: {training.gated_hold_actions}")
     print("training actions:")
     print(f"  HOLD: {training.hold_actions}")
@@ -62,6 +69,7 @@ def main() -> None:
         agent, seed=evaluation_seed, market_length=256, max_steps=200,
         trade_penalty=0.0025, invalid_action_penalty=0.001, drawdown_penalty=0.02,
         opportunity_margin=opportunity_margin,
+        confidence_threshold=confidence_threshold,
     )
     hold = evaluate_hold(seed=evaluation_seed, market_length=256, max_steps=200)
     buy_hold = evaluate_buy_and_hold(seed=evaluation_seed, market_length=256, max_steps=200)
@@ -73,6 +81,9 @@ def main() -> None:
     print(f"agent drawdown: {evaluation.max_drawdown_pct:.3f}%")
     print(f"agent trades: {evaluation.trades}")
     print(f"agent trade frequency: {evaluation.trade_frequency:.3f}")
+    print(f"gate activation rate: {evaluation.gate_activation_rate:.1%}")
+    print(f"average confidence: {evaluation.average_confidence:.3f}")
+    print(f"median confidence: {evaluation.median_confidence:.3f}")
     print(f"gated HOLD decisions: {evaluation.gated_hold_actions}")
     print("agent actions:")
     print(f"  HOLD: {evaluation.hold_actions}")
@@ -87,6 +98,7 @@ def main() -> None:
         agent, seed=20_000, markets=20, market_length=256, max_steps=200,
         trade_penalty=0.0025, invalid_action_penalty=0.001, drawdown_penalty=0.02,
         opportunity_margin=opportunity_margin,
+        confidence_threshold=confidence_threshold,
     )
     print()
     print("Multi-market evaluation:")
@@ -96,6 +108,8 @@ def main() -> None:
     print(f"agent average drawdown: {multi.average_drawdown_pct:.3f}%")
     print(f"agent average trades: {multi.average_trades:.2f}")
     print(f"agent average trade frequency: {multi.average_trade_frequency:.3f}")
+    print(f"gate activation rate: {multi.gate_activation_rate:.1%}")
+    print(f"average confidence: {multi.average_confidence:.3f}")
     print(f"vs BUY&HOLD win rate: {multi.win_rate_vs_buy_hold:.1%}")
     print(f"vs BUY&HOLD excess return: {multi.average_excess_return_pct:.3f}%")
     print(f"HOLD average return: {multi.hold_average_return_pct:.3f}%")
