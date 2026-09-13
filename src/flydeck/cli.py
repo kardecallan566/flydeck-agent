@@ -22,11 +22,11 @@ def main() -> None:
     )
 
     opportunity_margin = 0.08
-    confidence_threshold = 0.15
-    print("FlyDeck Agent - Synthetic Crypto V7")
+    confidence_threshold = 0.55
+    print("FlyDeck Agent - Synthetic Crypto V7.1")
     print("learning: sparse k-WTA + recurrent circuit + TD(lambda) + raw-action learning")
-    print("decision: valence-aware evidence + execution-only opportunity gate")
-    print("architecture: learn raw action -> gate execution -> learn from executed reward")
+    print("decision: calibrated value confidence + execution-only opportunity gate")
+    print("architecture: train raw policy -> evaluate raw policy -> gate execution only")
     print(f"market features: {environment.observation_size}")
     print(f"sparse state: {encoder.output_size} units | {encoder.active_units} active ({encoder.sparsity:.1%})")
     print("actions: HOLD / BUY / SELL")
