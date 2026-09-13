@@ -26,7 +26,7 @@ share/python-wheels/
 MANIFEST
 
 # PyInstaller
-#   Usually these files are written by a program before being added to source control:
+#   Usually a template, but if you prefer to keep it in source control uncomment:
 # .manifest
 # .spec
 
@@ -53,17 +53,17 @@ cover/
 *.mo
 *.pot
 
-# Django stuff
+# Django stuff:
 *.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
-# Flask stuff
+# Flask stuff:
 instance/
 .webassets-cache
 
-# Scrapy
+# Scrapy stuff:
 .scrapy
 
 # Sphinx documentation
@@ -73,37 +73,41 @@ docs/_build/
 .pybuilder/
 target/
 
-# Jupyter
+# Jupyter Notebook
 .ipynb_checkpoints
 
+# IPython
+profile_default/
+ipython_config.py
+
 # pyenv
-.python-version
+#   For a library that supports pyenv, keep .python-version in source control if desired.
+# .python-version
 
 # pipenv
-Pipfile.lock
+#   According to Pipfile.lock, it is generally recommended to include Pipfile.lock in version control.
+# Pipfile.lock
 
 # UV
-.uv/
-uv.lock
+#   Similar to pipenv, it is generally recommended to include uv.lock in version control.
+# uv.lock
 
 # poetry
-poetry.lock
-poetry.toml
+#   Similar to pipenv, it is generally recommended to include poetry.lock in version control.
+# poetry.lock
+# poetry.toml
 
 # pdm
 .pdm-python
 .pdm-build/
-pdm.lock
-pdm.toml
 
 # pixi
 .pixi
-pixi.lock
 
-# PEP 582
+# PEP 582; used by github.com/David-OConnor/pyflow
 __pypackages__/
 
-# Celery
+# Celery stuff
 celerybeat-schedule
 celerybeat.pid
 
@@ -120,7 +124,7 @@ rabbitmq-data/
 # ActiveMQ
 activemq-data/
 
-# SageMath
+# SageMath parsed files
 *.sage.py
 
 # Environments
@@ -130,41 +134,53 @@ activemq-data/
 env/
 venv/
 ENV/
-env.bak
+env.bak/
 venv.bak/
 
-# Spyder
+# Spyder project settings
 .spyderproject
 .spyproject
 
-# Rope
+# Rope project settings
 .ropeproject
+
+# mkdocs documentation
+/site
 
 # mypy
 .mypy_cache/
 .dmypy.json
 dmypy.json
 
-# Pyre
+# Pyre type checker
 .pyre/
 
-# pytype
+# pytype static type analyzer
 .pytype/
 
-# Cython
+# Cython debug symbols
 cython_debug/
 
 # PyCharm
-.idea/
+#   JetBrains specific template is maintained in a separate JetBrains.gitignore that can
+#   be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
+#   For a more nuclear version, uncomment the following line:
+# .idea/
 
-# VS Code
-.vscode/
+# Abstra
+#   Abstra stores local credentials/state/settings here.
+.abstra/
+
+# Visual Studio Code
+#   Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore
+# .vscode/
+# Temporary file for partial execution
 tempCodeRunnerFile.py
 
 # Ruff
 .ruff_cache/
 
-# PyPI
+# PyPI configuration file
 .pypirc
 
 # Marimo
