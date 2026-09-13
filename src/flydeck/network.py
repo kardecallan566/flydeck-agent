@@ -33,15 +33,9 @@ class SparseNetwork:
         self.output_size = output_size
         rng = random.Random(seed)
 
-        self._input_connections = self._connect(
-            input_size, hidden_size, density, rng
-        )
-        self._recurrent_connections = self._connect(
-            hidden_size, hidden_size, density, rng
-        )
-        self._output_connections = self._connect(
-            hidden_size, output_size, density, rng
-        )
+        self._input_connections = self._connect(input_size, hidden_size, density, rng)
+        self._recurrent_connections = self._connect(hidden_size, hidden_size, density, rng)
+        self._output_connections = self._connect(hidden_size, output_size, density, rng)
         self._state = [0.0] * hidden_size
 
     @staticmethod
@@ -52,9 +46,7 @@ class SparseNetwork:
         for source in range(source_size):
             for target in range(target_size):
                 if rng.random() <= density:
-                    connections.append(
-                        Connection(source, target, rng.uniform(-1.0, 1.0))
-                    )
+                    connections.append(Connection(source, target, rng.uniform(-1.0, 1.0)))
         return connections
 
     @staticmethod
@@ -77,6 +69,23 @@ class SparseNetwork:
         for connection in self._output_connections:
             output[connection.target] += self._state[connection.source] * connection.weight
         return tuple(output)
+
+    def learn(self, action: int, reward: float, learning_rate: float = 0.02) -> None:
+        """Reinforce the active output pathway using the latest hidden state."""
+        if not 0 <= action < self.output_size:
+            raise ValueError("action is outside the output range")
+        if learning_rate <= 0:
+            raise ValueError("learning_rate must be > 0")
+
+        updated: list[Connection] = []
+        for connection in self._output_connections:
+            if connection.target == action:
+                weight = connection.weight + learning_rate * reward * self._state[connection.source]
+                weight = max(-2.0, min(2.0, weight))
+                updated.append(Connection(connection.source, connection.target, weight))
+            else:
+                updated.append(connection)
+        self._output_connections = updated
 
     def reset(self) -> None:
         self._state = [0.0] * self.hidden_size
