@@ -38,6 +38,7 @@ class SparseNetwork:
         self._output_connections = self._connect(hidden_size, output_size, density, rng)
         self._state = [0.0] * hidden_size
         self._decision_state = [0.0] * hidden_size
+        self._previous_decision_state = [0.0] * hidden_size
         self._eligibility = [0.0] * len(self._output_connections)
 
     @staticmethod
@@ -64,6 +65,10 @@ class SparseNetwork:
     def step(self, observation: tuple[float, ...]) -> tuple[float, ...]:
         if len(observation) != self.input_size:
             raise ValueError("observation size does not match network input")
+
+        # Preserve the state that generated the previous action before advancing
+        # the recurrent circuit to the next observation.
+        self._previous_decision_state = list(self._decision_state)
 
         next_state = [0.0] * self.hidden_size
         for connection in self._input_connections:
@@ -116,11 +121,15 @@ class SparseNetwork:
         if not 0.0 <= trace_decay <= 1.0:
             raise ValueError("trace_decay must be between 0 and 1")
 
+        # For non-terminal transitions, step() has already advanced to s(t+1),
+        # so use the preserved state that generated a(t). At a terminal transition
+        # no next step exists and the current decision state is still the right one.
+        decision_state = self._decision_state if done else self._previous_decision_state
         bootstrap = 0.0 if done else max(next_scores)
         current = 0.0
         for connection in self._output_connections:
             if connection.target == action:
-                current += self._decision_state[connection.source] * connection.weight
+                current += decision_state[connection.source] * connection.weight
         td_error = reward + discount * bootstrap - current
         td_error = max(-1.0, min(1.0, td_error))
 
@@ -130,7 +139,7 @@ class SparseNetwork:
         decay = discount * trace_decay
 
         for index, connection in enumerate(self._output_connections):
-            activation = self._decision_state[connection.source]
+            activation = decision_state[connection.source]
             direction = 1.0 if connection.target == action else -competitor_scale
             trace = decay * self._eligibility[index] + activation * direction
             weight = connection.weight + learning_rate * td_error * trace
@@ -145,6 +154,7 @@ class SparseNetwork:
     def reset(self) -> None:
         self._state = [0.0] * self.hidden_size
         self._decision_state = [0.0] * self.hidden_size
+        self._previous_decision_state = [0.0] * self.hidden_size
         self._eligibility = [0.0] * len(self._output_connections)
 
     @property
