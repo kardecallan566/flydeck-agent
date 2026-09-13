@@ -37,6 +37,7 @@ class SparseNetwork:
         self._recurrent_connections = self._connect(hidden_size, hidden_size, density, rng)
         self._output_connections = self._connect(hidden_size, output_size, density, rng)
         self._state = [0.0] * hidden_size
+        self._eligibility = [0.0] * len(self._output_connections)
 
     @staticmethod
     def _connect(
@@ -77,7 +78,7 @@ class SparseNetwork:
         return tuple(output)
 
     def learn(self, action: int, reward: float, learning_rate: float = 0.02) -> None:
-        """Use reward to reinforce the chosen action and contrast it with alternatives."""
+        """Legacy immediate reward update kept for non-finance environments."""
         if not 0 <= action < self.output_size:
             raise ValueError("action is outside the output range")
         if learning_rate <= 0:
@@ -93,8 +94,60 @@ class SparseNetwork:
             updated.append(Connection(connection.source, connection.target, weight))
         self._output_connections = updated
 
+    def learn_td(
+        self,
+        action: int,
+        reward: float,
+        next_scores: tuple[float, ...],
+        done: bool,
+        learning_rate: float = 0.005,
+        discount: float = 0.97,
+        trace_decay: float = 0.85,
+    ) -> float:
+        """Learn from a temporal-difference error using sparse eligibility traces.
+
+        The trace keeps a short memory of recently active output pathways. This lets
+        delayed financial outcomes reinforce the recent decisions that contributed to
+        them without storing a large replay buffer or backpropagating through time.
+        """
+        if not 0 <= action < self.output_size:
+            raise ValueError("action is outside the output range")
+        if len(next_scores) != self.output_size:
+            raise ValueError("next_scores size does not match network output")
+        if learning_rate <= 0 or not 0.0 < discount <= 1.0:
+            raise ValueError("learning_rate must be > 0 and discount must be in (0, 1]")
+        if not 0.0 <= trace_decay <= 1.0:
+            raise ValueError("trace_decay must be between 0 and 1")
+
+        bootstrap = 0.0 if done else max(next_scores)
+        current = 0.0
+        for connection in self._output_connections:
+            if connection.target == action:
+                current += self._state[connection.source] * connection.weight
+        td_error = reward + discount * bootstrap - current
+        td_error = max(-1.0, min(1.0, td_error))
+
+        updated: list[Connection] = []
+        new_eligibility: list[float] = []
+        competitor_scale = 1.0 / max(self.output_size - 1, 1)
+        decay = discount * trace_decay
+
+        for index, connection in enumerate(self._output_connections):
+            activation = self._state[connection.source]
+            direction = 1.0 if connection.target == action else -competitor_scale
+            trace = decay * self._eligibility[index] + activation * direction
+            weight = connection.weight + learning_rate * td_error * trace
+            weight = max(-2.0, min(2.0, weight))
+            updated.append(Connection(connection.source, connection.target, weight))
+            new_eligibility.append(trace)
+
+        self._output_connections = updated
+        self._eligibility = new_eligibility
+        return td_error
+
     def reset(self) -> None:
         self._state = [0.0] * self.hidden_size
+        self._eligibility = [0.0] * len(self._output_connections)
 
     @property
     def connection_count(self) -> int:
