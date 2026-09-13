@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import dataclass
-from math import sqrt
 
 from .agent import Agent
 from .finance import Candle, CryptoTradingEnvironment
 from .finance_encoder import SparseMarketEncoder
+
+
+REGIMES = ("trend_up", "trend_down", "sideways", "volatile", "reversal")
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,12 +37,7 @@ class PolicyDiagnostics:
 
 
 def _regime(observation: tuple[float, ...]) -> str:
-    """Infer a coarse regime from the same normalized market features the agent sees.
-
-    This is diagnostic only. SyntheticCryptoMarket does not expose regime labels in
-    Candle, so the classifier deliberately uses observable features instead of
-    reconstructing the generator's hidden state.
-    """
+    """Infer a coarse observable regime for diagnostics only."""
     short_return = observation[1]
     volatility = observation[6]
     range_position = observation[8]
@@ -64,7 +60,7 @@ def diagnose_policy(
     label: str,
     max_steps: int = 200,
 ) -> PolicyDiagnostics:
-    """Inspect the trained policy without changing weights or applying the gate."""
+    """Inspect the greedy policy without changing weights or applying the gate."""
     environment = CryptoTradingEnvironment(candles, max_steps=max_steps)
     encoder = SparseMarketEncoder(feature_count=environment.observation_size, winners=4)
     if agent.network.input_size != encoder.output_size or agent.network.output_size != 3:
@@ -76,21 +72,21 @@ def diagnose_policy(
 
     actions = [0, 0, 0]
     score_sums = [0.0, 0.0, 0.0]
-    spreads: list[float] = []
-    active_magnitudes: list[float] = []
+    spread_sum = 0.0
+    active_magnitude_sum = 0.0
     sparse_states: set[tuple[float, ...]] = set()
-    regime_counts = {name: [0, 0, 0] for name in ("trend_up", "trend_down", "sideways", "volatile", "reversal")}
+    regime_counts = {name: [0, 0, 0] for name in REGIMES}
 
     for _ in range(max_steps):
         encoded = encoder.encode(observation)
         sparse_states.add(encoded)
-        active_magnitudes.append(sum(abs(value) for value in encoded))
+        active_magnitude_sum += sum(abs(value) for value in encoded)
         scores = agent.observe(encoded)
         action = agent.choose_action(scores)
         actions[action] += 1
         for index, score in enumerate(scores):
             score_sums[index] += score
-        spreads.append(max(scores) - min(scores))
+        spread_sum += max(scores) - min(scores)
         regime_counts[_regime(observation)][action] += 1
 
         result = environment.step(action)
@@ -100,23 +96,50 @@ def diagnose_policy(
             break
 
     count = max(1, sum(actions))
-    regimes = {
-        name: RegimeStats(*counts) for name, counts in regime_counts.items()
-    }
     return PolicyDiagnostics(
         label=label,
         actions=tuple(actions),
         average_scores=tuple(score / count for score in score_sums),
-        average_score_spread=sum(spreads) / max(1, len(spreads)),
+        average_score_spread=spread_sum / count,
         unique_sparse_states=len(sparse_states),
-        average_active_magnitude=sum(active_magnitudes) / max(1, len(active_magnitudes)),
+        average_active_magnitude=active_magnitude_sum / count,
+        inferred_regimes={name: RegimeStats(*counts) for name, counts in regime_counts.items()},
+    )
+
+
+def aggregate_diagnostics(results: list[PolicyDiagnostics], label: str) -> PolicyDiagnostics:
+    """Aggregate independent markets while preserving unique-state diversity."""
+    if not results:
+        raise ValueError("at least one diagnostic result is required")
+
+    actions = tuple(sum(result.actions[index] for result in results) for index in range(3))
+    total = max(1, sum(actions))
+    average_scores = tuple(
+        sum(result.average_scores[index] * result.total_actions for result in results) / total
+        for index in range(3)
+    )
+    regimes = {
+        name: RegimeStats(
+            sum(result.inferred_regimes[name].hold for result in results),
+            sum(result.inferred_regimes[name].buy for result in results),
+            sum(result.inferred_regimes[name].sell for result in results),
+        )
+        for name in REGIMES
+    }
+    return PolicyDiagnostics(
+        label=label,
+        actions=actions,
+        average_scores=average_scores,
+        average_score_spread=sum(result.average_score_spread * result.total_actions for result in results) / total,
+        unique_sparse_states=sum(result.unique_sparse_states for result in results),
+        average_active_magnitude=sum(result.average_active_magnitude * result.total_actions for result in results) / total,
         inferred_regimes=regimes,
     )
 
 
 def format_diagnostics(diagnostics: PolicyDiagnostics) -> str:
     lines = [
-        f"{diagnostics.label}",
+        diagnostics.label,
         "actions:",
         f"  HOLD: {diagnostics.actions[0]:4d} ({diagnostics.actions[0] / max(1, diagnostics.total_actions):.1%})",
         f"  BUY:  {diagnostics.actions[1]:4d} ({diagnostics.actions[1] / max(1, diagnostics.total_actions):.1%})",
