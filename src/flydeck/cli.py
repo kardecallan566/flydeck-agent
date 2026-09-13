@@ -3,7 +3,7 @@ from __future__ import annotations
 from .agent import Agent
 from .environment import CounterEnvironment
 from .finance import CryptoTradingEnvironment, SyntheticCryptoMarket
-from .finance_training import train_synthetic_crypto
+from .finance_training import evaluate_synthetic_crypto, train_synthetic_crypto
 from .navigation import GridNavigationEnvironment
 
 
@@ -41,21 +41,29 @@ def main() -> None:
     print(f"last return: {training.last_return_pct:.3f}%")
     print(f"average drawdown: {training.average_drawdown_pct:.3f}%")
     print(f"trades: {training.total_trades}")
+    print("training actions:")
+    print(f"  HOLD: {training.hold_actions}")
+    print(f"  BUY:  {training.buy_actions}")
+    print(f"  SELL: {training.sell_actions}")
 
-    evaluation_environment = CryptoTradingEnvironment(
-        SyntheticCryptoMarket(length=256, seed=10_000).generate(),
+    evaluation = evaluate_synthetic_crypto(
+        agent,
+        seed=10_000,
+        market_length=256,
         max_steps=200,
     )
-    evaluation = agent.run(evaluation_environment, max_steps=200)
-    metrics = evaluation_environment.episode_result(evaluation.total_reward)
     print()
     print("Unseen-market evaluation:")
-    print(f"return: {metrics.return_pct:.3f}%")
-    print(f"final portfolio: {metrics.final_portfolio:.2f}")
-    print(f"max drawdown: {metrics.max_drawdown_pct:.3f}%")
-    print(f"trades: {metrics.trades}")
-    print(f"connections: {evaluation.connection_count}")
-    print(f"memory: {evaluation.memory_size}")
+    print(f"return: {evaluation.return_pct:.3f}%")
+    print(f"final portfolio: {evaluation.final_portfolio:.2f}")
+    print(f"max drawdown: {evaluation.max_drawdown_pct:.3f}%")
+    print(f"trades: {evaluation.trades}")
+    print("evaluation actions:")
+    print(f"  HOLD: {evaluation.hold_actions}")
+    print(f"  BUY:  {evaluation.buy_actions}")
+    print(f"  SELL: {evaluation.sell_actions}")
+    print(f"connections: {agent.network.connection_count}")
+    print(f"memory: {len(agent.memory)}")
 
 
 def navigation_demo() -> None:
