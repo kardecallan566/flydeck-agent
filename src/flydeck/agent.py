@@ -25,6 +25,7 @@ class Agent:
         hidden_size: int = 32,
         density: float = 0.15,
         memory_capacity: int = 256,
+        learning_rate: float = 0.02,
         seed: int = 42,
     ) -> None:
         self.network = SparseNetwork(
@@ -35,12 +36,16 @@ class Agent:
             seed=seed,
         )
         self.memory = Memory(memory_capacity)
+        self.learning_rate = learning_rate
 
     def act(self, observation: tuple[float, ...]) -> int:
         scores = self.network.step(observation)
         return max(range(len(scores)), key=scores.__getitem__)
 
     def run(self, environment: Environment, max_steps: int = 100) -> AgentResult:
+        if max_steps < 1:
+            raise ValueError("max_steps must be >= 1")
+
         observation = environment.reset()
         self.network.reset()
         total_reward = 0.0
@@ -50,6 +55,7 @@ class Agent:
             action = self.act(observation)
             result = environment.step(action)
             self.memory.add(observation, action, result.reward, result.observation, result.done)
+            self.network.learn(action, result.reward, self.learning_rate)
             total_reward += result.reward
             steps += 1
             observation = result.observation
