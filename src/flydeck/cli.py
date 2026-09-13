@@ -3,7 +3,12 @@ from __future__ import annotations
 from .agent import Agent
 from .environment import CounterEnvironment
 from .finance import CryptoTradingEnvironment, SyntheticCryptoMarket
-from .finance_training import evaluate_synthetic_crypto, train_synthetic_crypto
+from .finance_training import (
+    evaluate_buy_and_hold,
+    evaluate_hold,
+    evaluate_synthetic_crypto,
+    train_synthetic_crypto,
+)
 from .navigation import GridNavigationEnvironment
 
 
@@ -33,6 +38,8 @@ def main() -> None:
         epsilon=0.35,
         epsilon_decay=0.99,
         min_epsilon=0.05,
+        trade_penalty=0.0005,
+        drawdown_penalty=0.02,
     )
 
     print(f"episodes: {training.episodes}")
@@ -46,17 +53,33 @@ def main() -> None:
     print(f"  BUY:  {training.buy_actions}")
     print(f"  SELL: {training.sell_actions}")
 
-    evaluation = evaluate_synthetic_crypto(agent, seed=10_000, market_length=256, max_steps=200)
+    evaluation_seed = 10_000
+    evaluation = evaluate_synthetic_crypto(
+        agent,
+        seed=evaluation_seed,
+        market_length=256,
+        max_steps=200,
+        trade_penalty=0.0005,
+        drawdown_penalty=0.02,
+    )
+    hold = evaluate_hold(seed=evaluation_seed, market_length=256, max_steps=200)
+    buy_hold = evaluate_buy_and_hold(seed=evaluation_seed, market_length=256, max_steps=200)
+
     print()
     print("Unseen-market evaluation:")
-    print(f"return: {evaluation.return_pct:.3f}%")
-    print(f"final portfolio: {evaluation.final_portfolio:.2f}")
-    print(f"max drawdown: {evaluation.max_drawdown_pct:.3f}%")
-    print(f"trades: {evaluation.trades}")
-    print("evaluation actions:")
+    print(f"agent return: {evaluation.return_pct:.3f}%")
+    print(f"agent portfolio: {evaluation.final_portfolio:.2f}")
+    print(f"agent drawdown: {evaluation.max_drawdown_pct:.3f}%")
+    print(f"agent trades: {evaluation.trades}")
+    print("agent actions:")
     print(f"  HOLD: {evaluation.hold_actions}")
     print(f"  BUY:  {evaluation.buy_actions}")
     print(f"  SELL: {evaluation.sell_actions}")
+    print()
+    print("Baselines on the same unseen market:")
+    print(f"  HOLD:      {hold.return_pct:.3f}% | drawdown {hold.max_drawdown_pct:.3f}% | trades {hold.trades}")
+    print(f"  BUY&HOLD:  {buy_hold.return_pct:.3f}% | drawdown {buy_hold.max_drawdown_pct:.3f}% | trades {buy_hold.trades}")
+    print()
     print(f"connections: {agent.network.connection_count}")
     print(f"memory: {len(agent.memory)}")
 

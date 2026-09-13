@@ -38,6 +38,76 @@ class FinanceEvaluationResult:
         return self.hold_actions + self.buy_actions + self.sell_actions
 
 
+@dataclass(frozen=True, slots=True)
+class FinanceBaselineResult:
+    name: str
+    return_pct: float
+    final_portfolio: float
+    max_drawdown_pct: float
+    trades: int
+
+
+def _run_policy(
+    candles: tuple,
+    policy,
+    max_steps: int,
+) -> FinanceBaselineResult:
+    environment = CryptoTradingEnvironment(candles, max_steps=max_steps)
+    observation = environment.reset()
+    total_reward = 0.0
+
+    for step in range(max_steps):
+        action = policy(step, observation)
+        result = environment.step(action)
+        total_reward += result.reward
+        observation = result.observation
+        if result.done:
+            break
+
+    metrics = environment.episode_result(total_reward)
+    return FinanceBaselineResult(
+        name="policy",
+        return_pct=metrics.return_pct,
+        final_portfolio=metrics.final_portfolio,
+        max_drawdown_pct=metrics.max_drawdown_pct,
+        trades=metrics.trades,
+    )
+
+
+def evaluate_hold(
+    seed: int = 10_000,
+    market_length: int = 256,
+    max_steps: int = 200,
+) -> FinanceBaselineResult:
+    """Evaluate the no-risk HOLD baseline on a fresh market."""
+    candles = SyntheticCryptoMarket(length=market_length, seed=seed).generate()
+    result = _run_policy(candles, lambda _step, _observation: 0, max_steps)
+    return FinanceBaselineResult(
+        name="HOLD",
+        return_pct=result.return_pct,
+        final_portfolio=result.final_portfolio,
+        max_drawdown_pct=result.max_drawdown_pct,
+        trades=result.trades,
+    )
+
+
+def evaluate_buy_and_hold(
+    seed: int = 10_000,
+    market_length: int = 256,
+    max_steps: int = 200,
+) -> FinanceBaselineResult:
+    """Buy once, then hold the position for the rest of the market."""
+    candles = SyntheticCryptoMarket(length=market_length, seed=seed).generate()
+    result = _run_policy(candles, lambda step, _observation: 1 if step == 0 else 0, max_steps)
+    return FinanceBaselineResult(
+        name="BUY & HOLD",
+        return_pct=result.return_pct,
+        final_portfolio=result.final_portfolio,
+        max_drawdown_pct=result.max_drawdown_pct,
+        trades=result.trades,
+    )
+
+
 def train_synthetic_crypto(
     agent: Agent,
     episodes: int = 100,
@@ -47,6 +117,8 @@ def train_synthetic_crypto(
     epsilon: float = 0.25,
     epsilon_decay: float = 0.995,
     min_epsilon: float = 0.03,
+    trade_penalty: float = 0.0005,
+    drawdown_penalty: float = 0.02,
 ) -> FinanceTrainingResult:
     """Train across a different generated market on every episode."""
     if episodes < 1:
@@ -70,7 +142,12 @@ def train_synthetic_crypto(
 
     for episode in range(episodes):
         candles = SyntheticCryptoMarket(length=market_length, seed=seed + episode).generate()
-        environment = CryptoTradingEnvironment(candles, max_steps=max_steps)
+        environment = CryptoTradingEnvironment(
+            candles,
+            max_steps=max_steps,
+            trade_penalty=trade_penalty,
+            drawdown_penalty=drawdown_penalty,
+        )
         observation = environment.reset()
         total_reward = 0.0
 
@@ -109,10 +186,17 @@ def evaluate_synthetic_crypto(
     seed: int = 10_000,
     market_length: int = 256,
     max_steps: int = 200,
+    trade_penalty: float = 0.0005,
+    drawdown_penalty: float = 0.02,
 ) -> FinanceEvaluationResult:
     """Evaluate greedily on a fresh market without changing agent weights."""
     candles = SyntheticCryptoMarket(length=market_length, seed=seed).generate()
-    environment = CryptoTradingEnvironment(candles, max_steps=max_steps)
+    environment = CryptoTradingEnvironment(
+        candles,
+        max_steps=max_steps,
+        trade_penalty=trade_penalty,
+        drawdown_penalty=drawdown_penalty,
+    )
     observation = environment.reset()
     total_reward = 0.0
     action_counts = [0, 0, 0]
