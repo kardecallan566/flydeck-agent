@@ -20,7 +20,7 @@ def test_navigation_observation_and_reset() -> None:
     assert len(observation) == 6
     assert environment.observation_size == 6
     assert environment.action_size == 4
-    assert observation[0] == 0.0  # up is open from the top-left corner? no: see below
+    assert observation[0] == 1.0  # up is blocked by the grid boundary
     assert observation[1] == 1.0  # right is blocked by obstacle
     assert observation[-2:] == (1.0, 1.0)
 
@@ -29,8 +29,8 @@ def test_navigation_reaches_goal_on_valid_path() -> None:
     environment = make_environment()
     environment.reset()
 
-    # Down, down, right, right, up, right, down reaches the goal around obstacles.
-    actions = [2, 2, 1, 1, 0, 1, 2]
+    # Down, down, right, right, down, right.
+    actions = [2, 2, 1, 1, 2, 1]
     result = None
     for action in actions:
         result = environment.step(action)
@@ -64,4 +64,5 @@ def test_agent_can_train_on_navigation_environment() -> None:
 
     assert result.episodes == 5
     assert result.successful_episodes >= 0
-    assert result.best_reward >= result.last_reward or result.last_reward >= result.best_reward
+    assert result.best_reward >= result.average_reward
+    assert result.best_reward >= result.last_reward
