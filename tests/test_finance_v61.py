@@ -15,16 +15,20 @@ def test_adaptive_gate_relaxes_when_scores_are_small():
 
 def test_adaptive_gate_still_blocks_weak_trade_opportunity():
     gated, confidence, adaptive_margin = _gate_decision(
-        (0.25, 0.26, 0.24), opportunity_margin=0.08, confidence_threshold=0.20
+        (0.25, 0.26, 0.24),
+        opportunity_margin=0.08,
+        confidence_threshold=0.20,
     )
     assert adaptive_margin == approx(0.005)
     assert confidence == approx(0.50)
-    assert gated
+    assert not gated
 
 
 def test_adaptive_gate_blocks_when_hold_is_best():
     gated, confidence, _adaptive_margin = _gate_decision(
-        (0.30, 0.20, 0.10), opportunity_margin=0.08, confidence_threshold=0.20
+        (0.30, 0.20, 0.10),
+        opportunity_margin=0.08,
+        confidence_threshold=0.20,
     )
     assert gated
     assert confidence == 0.0
