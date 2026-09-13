@@ -97,6 +97,8 @@ class CryptoTradingEnvironment:
         initial_capital: float = 10_000.0,
         trade_fraction: float = 0.25,
         fee_rate: float = 0.001,
+        trade_penalty: float = 0.0005,
+        drawdown_penalty: float = 0.02,
         window: int = 24,
         max_steps: int | None = None,
     ) -> None:
@@ -108,11 +110,17 @@ class CryptoTradingEnvironment:
             raise ValueError("trade_fraction must be in (0, 1]")
         if fee_rate < 0:
             raise ValueError("fee_rate must be >= 0")
+        if trade_penalty < 0:
+            raise ValueError("trade_penalty must be >= 0")
+        if drawdown_penalty < 0:
+            raise ValueError("drawdown_penalty must be >= 0")
 
         self.candles = tuple(candles)
         self.initial_capital = initial_capital
         self.trade_fraction = trade_fraction
         self.fee_rate = fee_rate
+        self.trade_penalty = trade_penalty
+        self.drawdown_penalty = drawdown_penalty
         self.window = window
         self.max_steps = max_steps or len(self.candles) - window - 1
         if self.max_steps < 1:
@@ -152,6 +160,7 @@ class CryptoTradingEnvironment:
             raise ValueError("action is outside the environment action range")
 
         price = self._closes[self.index]
+        traded = False
         if action == 1:
             amount = self.cash * self.trade_fraction
             cost = amount * (1.0 + self.fee_rate)
@@ -159,21 +168,30 @@ class CryptoTradingEnvironment:
                 self.cash -= cost
                 self.asset_units += amount / price
                 self.trades += 1
+                traded = True
         elif action == 2:
             units = self.asset_units * self.trade_fraction
             if units > 0:
                 self.asset_units -= units
                 self.cash += units * price * (1.0 - self.fee_rate)
                 self.trades += 1
+                traded = True
 
         previous_value = self._portfolio_value
         self.index += 1
         self.steps += 1
         self._portfolio_value = self.cash + self.asset_units * self._closes[self.index]
-        reward = self._portfolio_value / previous_value - 1.0
 
+        raw_return = self._portfolio_value / previous_value - 1.0
         self.peak_value = max(self.peak_value, self._portfolio_value)
-        self.max_drawdown = min(self.max_drawdown, self._portfolio_value / self.peak_value - 1.0)
+        current_drawdown = self._portfolio_value / self.peak_value - 1.0
+        self.max_drawdown = min(self.max_drawdown, current_drawdown)
+
+        reward = raw_return
+        if traded:
+            reward -= self.trade_penalty
+        reward += self.drawdown_penalty * current_drawdown
+
         done = self.steps >= self.max_steps or self.index >= len(self.candles) - 1
         return StepResult(self._observation(), reward, done)
 
