@@ -2,12 +2,17 @@ import math
 
 from flydeck.agent import Agent
 from flydeck.finance import CryptoTradingEnvironment, SyntheticCryptoMarket
-from flydeck.finance_training import evaluate_synthetic_crypto, train_synthetic_crypto
+from flydeck.finance_training import (
+    evaluate_buy_and_hold,
+    evaluate_hold,
+    evaluate_synthetic_crypto,
+    train_synthetic_crypto,
+)
 
 
-def make_environment(seed: int = 7) -> CryptoTradingEnvironment:
+def make_environment(seed: int = 7, **kwargs) -> CryptoTradingEnvironment:
     market = SyntheticCryptoMarket(length=160, seed=seed).generate()
-    return CryptoTradingEnvironment(market, window=24, max_steps=100)
+    return CryptoTradingEnvironment(market, window=24, max_steps=100, **kwargs)
 
 
 def test_market_generation_is_deterministic_but_seeded() -> None:
@@ -49,6 +54,19 @@ def test_hold_does_not_create_trades() -> None:
     assert environment.trades == 0
     assert result.done is False
     assert environment.position_ratio == 0.0
+
+
+def test_risk_aware_reward_penalizes_trade_and_drawdown() -> None:
+    market = SyntheticCryptoMarket(length=96, seed=77).generate()
+    plain = CryptoTradingEnvironment(market, window=24, max_steps=40, trade_penalty=0.0, drawdown_penalty=0.0)
+    risk = CryptoTradingEnvironment(market, window=24, max_steps=40, trade_penalty=0.01, drawdown_penalty=0.10)
+
+    plain.reset()
+    risk.reset()
+    plain_result = plain.step(1)
+    risk_result = risk.step(1)
+
+    assert risk_result.reward <= plain_result.reward
 
 
 def test_agent_can_train_on_unpredictable_market() -> None:
@@ -122,3 +140,15 @@ def test_greedy_evaluation_returns_action_distribution() -> None:
     assert result.trades == result.buy_actions + result.sell_actions
     assert math.isfinite(result.return_pct)
     assert math.isfinite(result.max_drawdown_pct)
+
+
+def test_baselines_are_deterministic_and_buy_hold_trades_once() -> None:
+    hold = evaluate_hold(seed=123, market_length=96, max_steps=40)
+    hold_again = evaluate_hold(seed=123, market_length=96, max_steps=40)
+    buy_hold = evaluate_buy_and_hold(seed=123, market_length=96, max_steps=40)
+
+    assert hold == hold_again
+    assert hold.trades == 0
+    assert buy_hold.trades == 1
+    assert math.isfinite(hold.return_pct)
+    assert math.isfinite(buy_hold.return_pct)
