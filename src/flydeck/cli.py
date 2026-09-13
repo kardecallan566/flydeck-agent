@@ -6,6 +6,7 @@ from .finance import CryptoTradingEnvironment, SyntheticCryptoMarket
 from .finance_encoder import SparseMarketEncoder
 from .finance_training import evaluate_buy_and_hold, evaluate_hold
 from .finance_v7 import evaluate_synthetic_crypto_v7, train_synthetic_crypto_v7
+from .finance_v7_diagnostics import aggregate_diagnostics, diagnose_policy, format_diagnostics
 from .navigation import GridNavigationEnvironment
 
 
@@ -23,10 +24,11 @@ def main() -> None:
 
     opportunity_margin = 0.08
     confidence_threshold = 0.55
-    print("FlyDeck Agent - Synthetic Crypto V7.1")
+    print("FlyDeck Agent - Synthetic Crypto V7.2")
     print("learning: sparse k-WTA + recurrent circuit + TD(lambda) + raw-action learning")
     print("decision: calibrated value confidence + execution-only opportunity gate")
     print("architecture: train raw policy -> evaluate raw policy -> gate execution only")
+    print("diagnostics: scores + sparse-state diversity + inferred regimes")
     print(f"market features: {environment.observation_size}")
     print(f"sparse state: {encoder.output_size} units | {encoder.active_units} active ({encoder.sparsity:.1%})")
     print("actions: HOLD / BUY / SELL")
@@ -113,6 +115,29 @@ def main() -> None:
     print("Baselines on the same unseen market:")
     print(f"  HOLD:      {hold.return_pct:.3f}% | drawdown {hold.max_drawdown_pct:.3f}% | trades {hold.trades}")
     print(f"  BUY&HOLD:  {buy_hold.return_pct:.3f}% | drawdown {buy_hold.max_drawdown_pct:.3f}% | trades {buy_hold.trades}")
+
+    training_diagnostics = [
+        diagnose_policy(
+            agent,
+            SyntheticCryptoMarket(length=256, seed=seed).generate(),
+            label=f"training market seed {seed}",
+            max_steps=200,
+        )
+        for seed in range(100, 105)
+    ]
+    training_summary = aggregate_diagnostics(training_diagnostics, "Training-distribution diagnostics (5 markets)")
+    unseen_summary = diagnose_policy(
+        agent,
+        SyntheticCryptoMarket(length=256, seed=evaluation_seed).generate(),
+        label="Unseen-market diagnostics",
+        max_steps=200,
+    )
+
+    print()
+    print("=== V7.2 POLICY DIAGNOSTICS ===")
+    print(format_diagnostics(training_summary))
+    print()
+    print(format_diagnostics(unseen_summary))
     print()
     print(f"connections: {agent.network.connection_count}")
     print(f"memory: {len(agent.memory)}")
