@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 from statistics import mean
 
@@ -7,6 +8,17 @@ from .agent import Agent
 from .finance import Candle, CryptoTradingEnvironment
 from .finance_data import RealMarketDataset
 from .finance_encoder import SparseMarketEncoder
+
+
+HORIZONS = (1, 3, 6, 12, 24)
+ADVANTAGE_BUCKETS = (
+    (-float("inf"), -0.20, "<= -0.20"),
+    (-0.20, -0.10, "-0.20..-0.10"),
+    (-0.10, 0.00, "-0.10..0.00"),
+    (0.00, 0.10, "0.00..0.10"),
+    (0.10, 0.20, "0.10..0.20"),
+    (0.20, float("inf"), "> 0.20"),
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +70,15 @@ class DecisionRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class AdvantageBucket:
+    label: str
+    minimum: float
+    maximum: float
+    count: int
+    average_future_returns: tuple[float, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class DecisionQuality:
     records: tuple[DecisionRecord, ...]
     action_counts: tuple[int, int, int]
@@ -65,7 +86,26 @@ class DecisionQuality:
     average_buy_advantage: float
     average_sell_advantage: float
     max_buy_streak: int
+    holding_durations: tuple[int, ...]
     average_holding_steps: float
+    completed_holding_durations: tuple[int, ...]
+    transition_counts: tuple[tuple[int, ...], ...]
+    buy_advantage_buckets: tuple[AdvantageBucket, ...]
+    sell_advantage_buckets: tuple[AdvantageBucket, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RandomBaselineResult:
+    return_pct: float
+    final_portfolio: float
+    drawdown_pct: float
+    trades: int
+    steps: int
+    action_counts: tuple[int, int, int]
+
+    @property
+    def trade_frequency(self) -> float:
+        return self.trades / max(1, self.steps)
 
 
 def split_real_market(
@@ -107,7 +147,11 @@ def split_real_market(
     )
 
 
-def future_returns(candles: tuple[Candle, ...], index: int, horizons: tuple[int, ...] = (1, 3, 6, 12, 24)) -> tuple[tuple[int, float], ...]:
+def future_returns(
+    candles: tuple[Candle, ...],
+    index: int,
+    horizons: tuple[int, ...] = HORIZONS,
+) -> tuple[tuple[int, float], ...]:
     price = candles[index].close
     result: list[tuple[int, float]] = []
     for horizon in horizons:
@@ -117,14 +161,43 @@ def future_returns(candles: tuple[Candle, ...], index: int, horizons: tuple[int,
     return tuple(result)
 
 
+def _bucket_for(value: float) -> tuple[float, float, str]:
+    for minimum, maximum, label in ADVANTAGE_BUCKETS:
+        if minimum <= value < maximum:
+            return minimum, maximum, label
+    raise AssertionError("advantage did not match a bucket")
+
+
+def _build_advantage_buckets(
+    records: list[DecisionRecord],
+    action_index: int,
+    horizons: tuple[int, ...],
+) -> tuple[AdvantageBucket, ...]:
+    result: list[AdvantageBucket] = []
+    selected = [record for record in records if record.scores[action_index] - record.scores[0] is not None]
+    for minimum, maximum, label in ADVANTAGE_BUCKETS:
+        bucket_records = [
+            record for record in selected
+            if minimum <= record.scores[action_index] - record.scores[0] < maximum
+        ]
+        values: list[float] = []
+        averages: list[float] = []
+        for horizon in horizons:
+            values = [dict(record.future_returns).get(horizon) for record in bucket_records]
+            values = [value for value in values if value is not None]
+            averages.append(mean(values) if values else 0.0)
+        result.append(AdvantageBucket(label, minimum, maximum, len(bucket_records), tuple(averages)))
+    return tuple(result)
+
+
 def collect_decision_quality(
     agent: Agent,
     candles: tuple[Candle, ...],
     *,
     max_steps: int | None = None,
-    horizons: tuple[int, ...] = (1, 3, 6, 12, 24),
+    horizons: tuple[int, ...] = HORIZONS,
 ) -> DecisionQuality:
-    """Run greedy decisions and attach forward market returns to every decision."""
+    """Run greedy decisions and attach forward returns and position diagnostics."""
     environment = CryptoTradingEnvironment(candles, max_steps=max_steps)
     encoder = SparseMarketEncoder(feature_count=environment.observation_size, winners=4)
     if agent.network.input_size != encoder.output_size or agent.network.output_size != 3:
@@ -136,15 +209,23 @@ def collect_decision_quality(
     scores = agent.observe(encoder.encode(observation))
     records: list[DecisionRecord] = []
     counts = [0, 0, 0]
+    transition_counts = [[0, 0, 0] for _ in range(3)]
+    previous_action: int | None = None
     buy_streak = 0
     max_buy_streak = 0
     holding_durations: list[int] = []
-    current_holding = 0
+    completed_holding_durations: list[int] = []
+    entry_step: int | None = None
 
     for _ in range(environment.max_steps):
         index = environment.index
         action = agent.choose_action(scores)
         counts[action] += 1
+        if previous_action is not None:
+            transition_counts[previous_action][action] += 1
+        previous_action = action
+
+        was_in_position = environment.position_ratio > 0.0
         records.append(
             DecisionRecord(
                 index=index,
@@ -162,20 +243,24 @@ def collect_decision_quality(
         else:
             buy_streak = 0
 
-        if environment.position_ratio > 0:
-            current_holding += 1
-        elif current_holding:
-            holding_durations.append(current_holding)
-            current_holding = 0
-
         result = environment.step(action)
+        now_in_position = environment.position_ratio > 0.0
+        if not was_in_position and now_in_position:
+            entry_step = result.observation and environment.steps
+        elif was_in_position and not now_in_position and entry_step is not None:
+            duration = environment.steps - entry_step
+            holding_durations.append(duration)
+            completed_holding_durations.append(duration)
+            entry_step = None
+
         encoder.observe_action(action)
         if result.done:
             break
         scores = agent.observe(encoder.encode(result.observation))
 
-    if current_holding:
-        holding_durations.append(current_holding)
+    if entry_step is not None:
+        duration = environment.steps - entry_step
+        holding_durations.append(duration)
 
     average_by_action: list[tuple[float, ...]] = []
     for action in range(3):
@@ -189,6 +274,7 @@ def collect_decision_quality(
 
     buy_advantages = [record.scores[1] - record.scores[0] for record in records]
     sell_advantages = [record.scores[2] - record.scores[0] for record in records]
+    average_holding = mean(holding_durations) if holding_durations else 0.0
     return DecisionQuality(
         records=tuple(records),
         action_counts=tuple(counts),
@@ -196,7 +282,45 @@ def collect_decision_quality(
         average_buy_advantage=mean(buy_advantages) if buy_advantages else 0.0,
         average_sell_advantage=mean(sell_advantages) if sell_advantages else 0.0,
         max_buy_streak=max_buy_streak,
-        average_holding_steps=mean(holding_durations) if holding_durations else 0.0,
+        holding_durations=tuple(holding_durations),
+        average_holding_steps=average_holding,
+        completed_holding_durations=tuple(completed_holding_durations),
+        transition_counts=tuple(tuple(row) for row in transition_counts),
+        buy_advantage_buckets=_build_advantage_buckets(records, 1, horizons),
+        sell_advantage_buckets=_build_advantage_buckets(records, 2, horizons),
+    )
+
+
+def run_random_baseline(
+    candles: tuple[Candle, ...],
+    *,
+    max_steps: int | None = None,
+    seed: int = 42,
+) -> RandomBaselineResult:
+    """Evaluate a deterministic uniformly random policy on the same environment."""
+    environment = CryptoTradingEnvironment(candles, max_steps=max_steps)
+    rng = random.Random(seed)
+    total_reward = 0.0
+    counts = [0, 0, 0]
+    observation = environment.reset()
+    del observation
+
+    for _ in range(environment.max_steps):
+        action = rng.randrange(3)
+        counts[action] += 1
+        result = environment.step(action)
+        total_reward += result.reward
+        if result.done:
+            break
+
+    metrics = environment.episode_result(total_reward)
+    return RandomBaselineResult(
+        return_pct=metrics.return_pct,
+        final_portfolio=metrics.final_portfolio,
+        drawdown_pct=metrics.max_drawdown_pct,
+        trades=metrics.trades,
+        steps=metrics.steps,
+        action_counts=tuple(counts),
     )
 
 
@@ -214,12 +338,7 @@ def train_real_market_v8(
     discount: float = 0.97,
     trace_decay: float = 0.85,
 ) -> RealBenchmarkResult:
-    """Train V8 through one chronological real-market pass.
-
-    Unlike the synthetic episode trainer, the network is reset only once so a long
-    historical dataset becomes one continuous learning stream instead of a sequence
-    of short resets. No future/test data is touched by this function.
-    """
+    """Train V8 through one chronological real-market pass."""
     environment = CryptoTradingEnvironment(
         candles,
         max_steps=max_steps,
