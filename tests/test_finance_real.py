@@ -4,7 +4,15 @@ from flydeck.agent import Agent
 from flydeck.finance import SyntheticCryptoMarket
 from flydeck.finance_data import RealMarketDataset, load_ohlcv_csv, save_ohlcv_csv
 from flydeck.finance_encoder import SparseMarketEncoder
-from flydeck.finance_real import collect_decision_quality, evaluate_real_market, future_returns, split_real_market, train_real_market_v8
+from flydeck.finance_real import (
+    HORIZONS,
+    collect_decision_quality,
+    evaluate_real_market,
+    future_returns,
+    run_random_baseline,
+    split_real_market,
+    train_real_market_v8,
+)
 
 
 def _dataset(length: int = 96) -> RealMarketDataset:
@@ -57,11 +65,30 @@ def test_real_training_and_unseen_evaluation_run():
     assert len(evaluation.score_means) == 3
 
 
-def test_decision_quality_records_forward_returns_and_action_counts():
+def test_decision_quality_contains_transitions_buckets_and_position_intervals():
     dataset = _dataset(96)
     quality = collect_decision_quality(_agent(), dataset.candles, max_steps=40)
     assert len(quality.records) == 40
     assert sum(quality.action_counts) == 40
     assert len(quality.average_future_returns_by_action) == 3
-    assert all(len(values) == 5 for values in quality.average_future_returns_by_action)
+    assert all(len(values) == len(HORIZONS) for values in quality.average_future_returns_by_action)
     assert quality.max_buy_streak >= 0
+    assert len(quality.transition_counts) == 3
+    assert all(len(row) == 3 for row in quality.transition_counts)
+    assert sum(sum(row) for row in quality.transition_counts) == 39
+    assert len(quality.buy_advantage_buckets) == 6
+    assert len(quality.sell_advantage_buckets) == 6
+    assert sum(bucket.count for bucket in quality.buy_advantage_buckets) == 40
+    assert sum(bucket.count for bucket in quality.sell_advantage_buckets) == 40
+    assert all(len(bucket.average_future_returns) == len(HORIZONS) for bucket in quality.buy_advantage_buckets)
+    assert quality.average_holding_steps >= 0.0
+
+
+def test_random_baseline_is_deterministic():
+    dataset = _dataset(96)
+    first = run_random_baseline(dataset.candles, max_steps=40, seed=7)
+    second = run_random_baseline(dataset.candles, max_steps=40, seed=7)
+    assert first == second
+    assert first.steps == 40
+    assert sum(first.action_counts) == 40
+    assert first.trades >= 0
