@@ -46,12 +46,7 @@ def main() -> None:
     print(f"  BUY:  {training.buy_actions}")
     print(f"  SELL: {training.sell_actions}")
 
-    evaluation = evaluate_synthetic_crypto(
-        agent,
-        seed=10_000,
-        market_length=256,
-        max_steps=200,
-    )
+    evaluation = evaluate_synthetic_crypto(agent, seed=10_000, market_length=256, max_steps=200)
     print()
     print("Unseen-market evaluation:")
     print(f"return: {evaluation.return_pct:.3f}%")

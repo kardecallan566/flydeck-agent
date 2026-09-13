@@ -48,8 +48,6 @@ class SparseNetwork:
                 if rng.random() <= density:
                     connections.append(Connection(source, target, rng.uniform(-1.0, 1.0)))
 
-        # Every target needs at least one incoming connection so an action cannot
-        # become permanently unreachable just because of a sparse random draw.
         connected_targets = {connection.target for connection in connections}
         for target in range(target_size):
             if target not in connected_targets:
@@ -79,12 +77,7 @@ class SparseNetwork:
         return tuple(output)
 
     def learn(self, action: int, reward: float, learning_rate: float = 0.02) -> None:
-        """Use reward to reinforce the chosen action and contrast it with alternatives.
-
-        Positive reward strengthens the selected output while slightly suppressing
-        competing outputs. Negative reward does the opposite. This keeps learning
-        directional instead of only changing the action that happened to be chosen.
-        """
+        """Use reward to reinforce the chosen action and contrast it with alternatives."""
         if not 0 <= action < self.output_size:
             raise ValueError("action is outside the output range")
         if learning_rate <= 0:
