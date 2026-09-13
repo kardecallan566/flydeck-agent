@@ -37,6 +37,7 @@ class SparseNetwork:
         self._recurrent_connections = self._connect(hidden_size, hidden_size, density, rng)
         self._output_connections = self._connect(hidden_size, output_size, density, rng)
         self._state = [0.0] * hidden_size
+        self._decision_state = [0.0] * hidden_size
         self._eligibility = [0.0] * len(self._output_connections)
 
     @staticmethod
@@ -71,6 +72,7 @@ class SparseNetwork:
             next_state[connection.target] += self._state[connection.source] * connection.weight
 
         self._state = [self._activate(value) for value in next_state]
+        self._decision_state = list(self._state)
 
         output = [0.0] * self.output_size
         for connection in self._output_connections:
@@ -87,7 +89,7 @@ class SparseNetwork:
         competitor_scale = 1.0 / max(self.output_size - 1, 1)
         updated: list[Connection] = []
         for connection in self._output_connections:
-            activation = self._state[connection.source]
+            activation = self._decision_state[connection.source]
             direction = 1.0 if connection.target == action else -competitor_scale
             weight = connection.weight + learning_rate * reward * activation * direction
             weight = max(-2.0, min(2.0, weight))
@@ -104,12 +106,7 @@ class SparseNetwork:
         discount: float = 0.97,
         trace_decay: float = 0.85,
     ) -> float:
-        """Learn from a temporal-difference error using sparse eligibility traces.
-
-        The trace keeps a short memory of recently active output pathways. This lets
-        delayed financial outcomes reinforce the recent decisions that contributed to
-        them without storing a large replay buffer or backpropagating through time.
-        """
+        """Learn from TD error using sparse eligibility traces."""
         if not 0 <= action < self.output_size:
             raise ValueError("action is outside the output range")
         if len(next_scores) != self.output_size:
@@ -123,7 +120,7 @@ class SparseNetwork:
         current = 0.0
         for connection in self._output_connections:
             if connection.target == action:
-                current += self._state[connection.source] * connection.weight
+                current += self._decision_state[connection.source] * connection.weight
         td_error = reward + discount * bootstrap - current
         td_error = max(-1.0, min(1.0, td_error))
 
@@ -133,7 +130,7 @@ class SparseNetwork:
         decay = discount * trace_decay
 
         for index, connection in enumerate(self._output_connections):
-            activation = self._state[connection.source]
+            activation = self._decision_state[connection.source]
             direction = 1.0 if connection.target == action else -competitor_scale
             trace = decay * self._eligibility[index] + activation * direction
             weight = connection.weight + learning_rate * td_error * trace
@@ -147,6 +144,7 @@ class SparseNetwork:
 
     def reset(self) -> None:
         self._state = [0.0] * self.hidden_size
+        self._decision_state = [0.0] * self.hidden_size
         self._eligibility = [0.0] * len(self._output_connections)
 
     @property
