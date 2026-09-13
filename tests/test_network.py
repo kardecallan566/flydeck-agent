@@ -26,3 +26,20 @@ def test_reset_clears_state():
 
     fresh = SparseNetwork(1, 4, 2, density=1.0, seed=1)
     assert reset_output == fresh.step((0.0,))
+
+
+def test_td_learning_is_deterministic_and_resettable():
+    first = SparseNetwork(2, 8, 3, density=0.25, seed=9)
+    second = SparseNetwork(2, 8, 3, density=0.25, seed=9)
+    first_scores = first.step((1.0, -0.5))
+    second_scores = second.step((1.0, -0.5))
+    first_error = first.learn_td(1, 0.2, (0.1, 0.4, -0.2), False)
+    second_error = second.learn_td(1, 0.2, (0.1, 0.4, -0.2), False)
+
+    assert first_scores == second_scores
+    assert first_error == second_error
+    assert first.step((0.25, 0.5)) == second.step((0.25, 0.5))
+
+    first.reset()
+    fresh = SparseNetwork(2, 8, 3, density=0.25, seed=9)
+    assert first.step((0.0, 0.0)) == fresh.step((0.0, 0.0))

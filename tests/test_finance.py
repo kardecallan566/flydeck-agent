@@ -6,6 +6,7 @@ from flydeck.finance_training import (
     evaluate_buy_and_hold,
     evaluate_hold,
     evaluate_synthetic_crypto,
+    evaluate_synthetic_crypto_multi_market,
     train_synthetic_crypto,
 )
 
@@ -54,7 +55,7 @@ def test_hold_does_not_create_trades() -> None:
 def test_invalid_trade_is_penalized_and_not_counted_as_trade() -> None:
     environment = make_environment(invalid_action_penalty=0.5)
     environment.reset()
-    result = environment.step(2)  # sell without a position
+    result = environment.step(2)
     assert environment.trades == 0
     assert environment.invalid_actions == 1
     assert result.reward < 0.0
@@ -116,3 +117,16 @@ def test_baselines_are_deterministic_and_buy_hold_trades_once() -> None:
     assert buy_hold.trades == 1
     assert math.isfinite(hold.return_pct)
     assert math.isfinite(buy_hold.return_pct)
+
+
+def test_multi_market_evaluation_is_deterministic() -> None:
+    agent = Agent(observation_size=12, action_size=3, hidden_size=12, density=0.10, learning_rate=0.005, seed=5)
+    first = evaluate_synthetic_crypto_multi_market(agent, seed=700, markets=4, market_length=96, max_steps=40)
+    second = evaluate_synthetic_crypto_multi_market(agent, seed=700, markets=4, market_length=96, max_steps=40)
+    assert first == second
+    assert first.markets == 4
+    assert 0.0 <= first.win_rate_vs_buy_hold <= 1.0
+    assert 0.0 <= first.average_trade_frequency <= 1.0
+    assert math.isfinite(first.average_return_pct)
+    assert math.isfinite(first.median_return_pct)
+    assert math.isfinite(first.average_excess_return_pct)
