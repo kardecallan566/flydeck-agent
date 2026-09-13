@@ -1,10 +1,24 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from .agent import Agent
-from .finance import CryptoTradingEnvironment
+from .finance import CryptoTradingEnvironment, SyntheticCryptoMarket
 from .finance_encoder import SparseMarketEncoder
 from .finance_training import evaluate_buy_and_hold, evaluate_hold
 from .finance_v8 import train_synthetic_crypto_v8
+
+
+@dataclass(frozen=True, slots=True)
+class UnseenEvaluation:
+    return_pct: float
+    final_portfolio: float
+    drawdown_pct: float
+    trades: int
+    steps: int
+    counts: tuple[int, int, int]
+    score_means: tuple[float, float, float]
+    score_advantages: tuple[float, float]
 
 
 def main() -> None:
@@ -13,11 +27,14 @@ def main() -> None:
     training_seed = 100
     evaluation_seed = 10_000
 
-    environment = CryptoTradingEnvironment((), max_steps=max_steps)
-    encoder = SparseMarketEncoder(feature_count=environment.observation_size, winners=4)
+    training_environment = CryptoTradingEnvironment(
+        SyntheticCryptoMarket(length=market_length, seed=training_seed).generate(),
+        max_steps=max_steps,
+    )
+    encoder = SparseMarketEncoder(feature_count=training_environment.observation_size, winners=4)
     agent = Agent(
         observation_size=encoder.output_size,
-        action_size=environment.action_size,
+        action_size=training_environment.action_size,
         hidden_size=32,
         density=0.10,
         learning_rate=0.005,
@@ -28,7 +45,7 @@ def main() -> None:
     print("learning: sparse k-WTA + recurrent circuit + TD(lambda)")
     print("V8 experiment: selected-action-only output TD update")
     print("competitor output weights are not directly pushed down")
-    print(f"market features: {environment.observation_size}")
+    print(f"market features: {training_environment.observation_size}")
     print(f"sparse state: {encoder.output_size} units | {encoder.active_units} active ({encoder.sparsity:.1%})")
     print("actions: HOLD / BUY / SELL")
     print(f"connections: {agent.network.connection_count}")
@@ -75,11 +92,11 @@ def main() -> None:
     print(f"agent portfolio: {evaluation.final_portfolio:.2f}")
     print(f"agent drawdown: {evaluation.drawdown_pct:.3f}%")
     print(f"agent trades: {evaluation.trades}")
-    print(f"agent trade frequency: {evaluation.trades / max(1, max_steps):.3f}")
+    print(f"agent trade frequency: {evaluation.trades / max(1, evaluation.steps):.3f}")
     print("policy actions:")
-    print(f"  HOLD: {evaluation.counts[0]} ({evaluation.counts[0] / max(1, max_steps):.1%})")
-    print(f"  BUY:  {evaluation.counts[1]} ({evaluation.counts[1] / max(1, max_steps):.1%})")
-    print(f"  SELL: {evaluation.counts[2]} ({evaluation.counts[2] / max(1, max_steps):.1%})")
+    print(f"  HOLD: {evaluation.counts[0]} ({evaluation.counts[0] / max(1, evaluation.steps):.1%})")
+    print(f"  BUY:  {evaluation.counts[1]} ({evaluation.counts[1] / max(1, evaluation.steps):.1%})")
+    print(f"  SELL: {evaluation.counts[2]} ({evaluation.counts[2] / max(1, evaluation.steps):.1%})")
     print("score diagnostics:")
     print(f"  HOLD mean: {evaluation.score_means[0]:.4f}")
     print(f"  BUY mean:  {evaluation.score_means[1]:.4f}")
@@ -96,9 +113,7 @@ def main() -> None:
     print(f"memory: {len(agent.memory)}")
 
 
-def _evaluate_unseen(agent: Agent, seed: int, market_length: int, max_steps: int):
-    from .finance import CryptoTradingEnvironment, SyntheticCryptoMarket
-
+def _evaluate_unseen(agent: Agent, seed: int, market_length: int, max_steps: int) -> UnseenEvaluation:
     environment = CryptoTradingEnvironment(
         SyntheticCryptoMarket(length=market_length, seed=seed).generate(),
         max_steps=max_steps,
@@ -113,39 +128,42 @@ def _evaluate_unseen(agent: Agent, seed: int, market_length: int, max_steps: int
     scores = agent.observe(encoder.encode(observation))
     counts = [0, 0, 0]
     score_totals = [0.0, 0.0, 0.0]
-    score_advantages = [[], []]
+    buy_advantages: list[float] = []
+    sell_advantages: list[float] = []
     total_reward = 0.0
+    steps = 0
 
     for _ in range(max_steps):
         action = agent.choose_action(scores)
         counts[action] += 1
         for index in range(3):
             score_totals[index] += scores[index]
-        score_advantages[0].append(scores[1] - scores[0])
-        score_advantages[1].append(scores[2] - scores[0])
+        buy_advantages.append(scores[1] - scores[0])
+        sell_advantages.append(scores[2] - scores[0])
 
         result = environment.step(action)
         encoder.observe_action(action)
         total_reward += result.reward
+        steps += 1
         if result.done:
             break
         scores = agent.observe(encoder.encode(result.observation))
 
     metrics = environment.episode_result(total_reward)
-
-    class Evaluation:
-        return_pct = metrics.return_pct
-        final_portfolio = metrics.final_portfolio
-        drawdown_pct = metrics.max_drawdown_pct
-        trades = metrics.trades
-        counts = counts
-        score_means = tuple(value / max(1, sum(counts)) for value in score_totals)
-        score_advantages = (
-            sum(score_advantages[0]) / max(1, len(score_advantages[0])),
-            sum(score_advantages[1]) / max(1, len(score_advantages[1])),
-        )
-
-    return Evaluation
+    denominator = max(1, steps)
+    return UnseenEvaluation(
+        return_pct=metrics.return_pct,
+        final_portfolio=metrics.final_portfolio,
+        drawdown_pct=metrics.max_drawdown_pct,
+        trades=metrics.trades,
+        steps=steps,
+        counts=tuple(counts),
+        score_means=tuple(value / denominator for value in score_totals),
+        score_advantages=(
+            sum(buy_advantages) / max(1, len(buy_advantages)),
+            sum(sell_advantages) / max(1, len(sell_advantages)),
+        ),
+    )
 
 
 if __name__ == "__main__":
