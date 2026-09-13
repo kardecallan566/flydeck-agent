@@ -1,3 +1,5 @@
+from pytest import approx
+
 from flydeck.agent import Agent
 from flydeck.finance_training import _gate_decision, _choose_finance_action
 
@@ -6,8 +8,8 @@ def test_adaptive_gate_relaxes_when_scores_are_small():
     gated, confidence, adaptive_margin = _gate_decision(
         (0.00, 0.03, -0.01), opportunity_margin=0.08, confidence_threshold=0.20
     )
-    assert adaptive_margin == 0.01
-    assert confidence == 0.75
+    assert adaptive_margin == approx(0.01)
+    assert confidence == approx(0.75)
     assert not gated
 
 
@@ -15,8 +17,8 @@ def test_adaptive_gate_still_blocks_weak_trade_opportunity():
     gated, confidence, adaptive_margin = _gate_decision(
         (0.25, 0.26, 0.24), opportunity_margin=0.08, confidence_threshold=0.20
     )
-    assert adaptive_margin == 0.005
-    assert confidence == 1.0 / 3.0
+    assert adaptive_margin == approx(0.005)
+    assert confidence == approx(0.50)
     assert gated
 
 

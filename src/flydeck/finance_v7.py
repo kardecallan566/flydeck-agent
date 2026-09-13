@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from statistics import median
 
@@ -89,17 +90,26 @@ class _Gate:
     opportunity: bool
 
 
+def _softmax(scores: tuple[float, ...], temperature: float) -> tuple[float, ...]:
+    scaled = tuple(score / temperature for score in scores)
+    maximum = max(scaled)
+    exponentials = tuple(math.exp(value - maximum) for value in scaled)
+    total = sum(exponentials)
+    return tuple(value / total for value in exponentials)
+
+
 def gate_action(
     scores: tuple[float, ...],
     opportunity_margin: float = 0.08,
-    confidence_threshold: float = 0.15,
+    confidence_threshold: float = 0.55,
+    temperature: float = 0.02,
 ) -> _Gate:
-    """Convert raw action evidence into an execution decision.
+    """Turn value evidence into an execution decision without changing learning.
 
-    The learned policy remains responsible for choosing the raw action. The
-    gate only decides whether weak directional evidence should be executed.
-    A 50% range-based margin prevents both the V5 over-trading failure and the
-    V6/V6.1 collapse caused by an oversized fixed HOLD zone.
+    Confidence is derived from a temperature-scaled softmax rather than from the
+    raw score range. This makes the gate sensitive to both the direction of the
+    best trade and how decisively it separates from HOLD, while avoiding the V6
+    failure mode where one fixed absolute margin dominated tiny recurrent scores.
     """
     if len(scores) != 3:
         raise ValueError("finance scores must contain HOLD, BUY and SELL")
@@ -107,30 +117,28 @@ def gate_action(
         raise ValueError("opportunity_margin must be >= 0")
     if not 0.0 <= confidence_threshold <= 1.0:
         raise ValueError("confidence_threshold must be between 0 and 1")
+    if temperature <= 0:
+        raise ValueError("temperature must be > 0")
 
     best_trade = max(scores[1:])
+    best_trade_action = 1 if scores[1] >= scores[2] else 2
     score_range = max(scores) - min(scores)
     trade_advantage = best_trade - scores[0]
-    adaptive_margin = max(0.005, min(opportunity_margin, score_range * 0.50))
+    adaptive_margin = max(0.005, min(opportunity_margin, score_range * 0.25))
 
-    confidence = 0.0
-    if trade_advantage > 0 and score_range > 1e-9:
-        confidence = min(1.0, trade_advantage / score_range)
-
+    probabilities = _softmax(scores, temperature)
+    confidence = probabilities[best_trade_action] if trade_advantage > 0 else 0.0
     opportunity = trade_advantage > adaptive_margin and confidence >= confidence_threshold
+
     if not opportunity:
         return _Gate(0, True, confidence, adaptive_margin, False)
-
-    raw_action = 1 if scores[1] >= scores[2] else 2
-    return _Gate(raw_action, False, confidence, adaptive_margin, True)
+    return _Gate(best_trade_action, False, confidence, adaptive_margin, True)
 
 
 def _make_encoder(agent: Agent) -> SparseMarketEncoder:
     encoder = SparseMarketEncoder(feature_count=12, winners=4)
     if agent.network.input_size != encoder.output_size or agent.network.output_size != 3:
-        raise ValueError(
-            "V7 finance agent requires a 27-input / 3-action sparse network"
-        )
+        raise ValueError("V7 finance agent requires a 27-input / 3-action sparse network")
     return encoder
 
 
@@ -176,15 +184,21 @@ def _run_episode(
     for _ in range(max_steps):
         gate = gate_action(scores, opportunity_margin, confidence_threshold)
         raw_action = agent.choose_action(scores)
-        raw_is_exploration = train and agent._rng.random() < epsilon
-        if raw_is_exploration:
+        if train and agent._rng.random() < epsilon:
             raw_action = agent._rng.randrange(3)
 
         raw_counts[raw_action] += 1
         confidences.append(gate.confidence)
         opportunities += int(gate.opportunity)
 
-        if raw_action == 0:
+        # Training must expose the raw policy to the real environment. Applying
+        # the gate during learning would again create a credit-assignment error:
+        # the network chooses BUY, the gate executes HOLD, and TD would attribute
+        # HOLD's reward to BUY. The gate is therefore strictly an execution layer.
+        if train:
+            executed_action = raw_action
+            gated = False
+        elif raw_action == 0:
             executed_action = 0
             gated = False
         elif gate.gated:
@@ -199,8 +213,7 @@ def _run_episode(
         executed_counts[executed_action] += 1
 
         result = environment.step(executed_action)
-        if encoder is not None:
-            encoder.observe_action(executed_action)
+        encoder.observe_action(executed_action)
 
         if result.done:
             next_scores = (0.0, 0.0, 0.0)
@@ -208,9 +221,6 @@ def _run_episode(
             next_scores = _observe(agent, encoder, result.observation)
 
         if train:
-            # Learn the value of the raw policy decision, not the HOLD injected
-            # by the execution gate. This removes the V6.1 feedback loop where
-            # gate -> HOLD -> TD target -> stronger HOLD policy reinforced itself.
             td_error = agent.network.learn_td(
                 raw_action,
                 result.reward,
@@ -257,7 +267,7 @@ def train_synthetic_crypto_v7(
     discount: float = 0.97,
     trace_decay: float = 0.85,
     opportunity_margin: float = 0.08,
-    confidence_threshold: float = 0.15,
+    confidence_threshold: float = 0.55,
 ) -> FinanceV7Result:
     if episodes < 1 or market_length < 32 or max_steps < 1:
         raise ValueError("episodes >= 1, market_length >= 32 and max_steps >= 1 are required")
@@ -333,7 +343,7 @@ def evaluate_synthetic_crypto_v7(
     invalid_action_penalty: float = 0.001,
     drawdown_penalty: float = 0.02,
     opportunity_margin: float = 0.08,
-    confidence_threshold: float = 0.15,
+    confidence_threshold: float = 0.55,
 ) -> FinanceV7Evaluation:
     result = _run_episode(
         agent,

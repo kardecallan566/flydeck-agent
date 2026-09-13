@@ -5,25 +5,25 @@ from flydeck.finance_v7 import gate_action, train_synthetic_crypto_v7
 
 
 def test_v7_gate_opens_for_clear_small_score_opportunity():
-    gate = gate_action((0.00, 0.03, -0.01), opportunity_margin=0.08, confidence_threshold=0.15)
-    assert gate.adaptive_margin == approx(0.02)
-    assert gate.confidence == approx(0.75)
+    gate = gate_action((0.00, 0.03, -0.01), opportunity_margin=0.08, confidence_threshold=0.55)
+    assert gate.adaptive_margin == approx(0.01)
+    assert gate.confidence == approx(0.7361247, rel=1e-5)
     assert gate.opportunity
     assert not gate.gated
     assert gate.action == 1
 
 
 def test_v7_gate_blocks_balanced_trade_scores():
-    gate = gate_action((0.25, 0.26, 0.24), opportunity_margin=0.08, confidence_threshold=0.15)
-    assert gate.adaptive_margin == approx(0.01)
-    assert gate.confidence == approx(0.50)
+    gate = gate_action((0.25, 0.26, 0.24), opportunity_margin=0.08, confidence_threshold=0.55)
+    assert gate.adaptive_margin == approx(0.005)
+    assert gate.confidence == approx(0.5064804, rel=1e-5)
     assert gate.gated
     assert not gate.opportunity
     assert gate.action == 0
 
 
 def test_v7_gate_blocks_when_hold_is_best():
-    gate = gate_action((0.30, 0.20, 0.10), opportunity_margin=0.08, confidence_threshold=0.15)
+    gate = gate_action((0.30, 0.20, 0.10), opportunity_margin=0.08, confidence_threshold=0.55)
     assert gate.gated
     assert gate.confidence == 0.0
     assert not gate.opportunity
