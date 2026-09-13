@@ -161,26 +161,17 @@ def future_returns(
     return tuple(result)
 
 
-def _bucket_for(value: float) -> tuple[float, float, str]:
-    for minimum, maximum, label in ADVANTAGE_BUCKETS:
-        if minimum <= value < maximum:
-            return minimum, maximum, label
-    raise AssertionError("advantage did not match a bucket")
-
-
 def _build_advantage_buckets(
     records: list[DecisionRecord],
     action_index: int,
     horizons: tuple[int, ...],
 ) -> tuple[AdvantageBucket, ...]:
     result: list[AdvantageBucket] = []
-    selected = [record for record in records if record.scores[action_index] - record.scores[0] is not None]
     for minimum, maximum, label in ADVANTAGE_BUCKETS:
         bucket_records = [
-            record for record in selected
+            record for record in records
             if minimum <= record.scores[action_index] - record.scores[0] < maximum
         ]
-        values: list[float] = []
         averages: list[float] = []
         for horizon in horizons:
             values = [dict(record.future_returns).get(horizon) for record in bucket_records]
@@ -197,7 +188,7 @@ def collect_decision_quality(
     max_steps: int | None = None,
     horizons: tuple[int, ...] = HORIZONS,
 ) -> DecisionQuality:
-    """Run greedy decisions and attach forward returns and position diagnostics."""
+    """Run greedy decisions and attach forward returns, transitions and position intervals."""
     environment = CryptoTradingEnvironment(candles, max_steps=max_steps)
     encoder = SparseMarketEncoder(feature_count=environment.observation_size, winners=4)
     if agent.network.input_size != encoder.output_size or agent.network.output_size != 3:
@@ -246,7 +237,7 @@ def collect_decision_quality(
         result = environment.step(action)
         now_in_position = environment.position_ratio > 0.0
         if not was_in_position and now_in_position:
-            entry_step = result.observation and environment.steps
+            entry_step = environment.steps
         elif was_in_position and not now_in_position and entry_step is not None:
             duration = environment.steps - entry_step
             holding_durations.append(duration)
@@ -259,8 +250,7 @@ def collect_decision_quality(
         scores = agent.observe(encoder.encode(result.observation))
 
     if entry_step is not None:
-        duration = environment.steps - entry_step
-        holding_durations.append(duration)
+        holding_durations.append(environment.steps - entry_step)
 
     average_by_action: list[tuple[float, ...]] = []
     for action in range(3):
@@ -302,9 +292,6 @@ def run_random_baseline(
     rng = random.Random(seed)
     total_reward = 0.0
     counts = [0, 0, 0]
-    observation = environment.reset()
-    del observation
-
     for _ in range(environment.max_steps):
         action = rng.randrange(3)
         counts[action] += 1
