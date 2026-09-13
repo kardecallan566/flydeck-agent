@@ -10,9 +10,6 @@ from .finance_encoder import SparseMarketEncoder
 from .finance_real import HORIZONS
 
 
-POSITION_STATES = ("FLAT", "LONG")
-
-
 @dataclass(frozen=True, slots=True)
 class PositionDecisionRecord:
     index: int
@@ -60,14 +57,13 @@ def _portfolio_returns(
     current_value: float,
     horizons: tuple[int, ...],
 ) -> tuple[tuple[int, float], ...]:
-    result: list[tuple[int, float]] = []
     if current_value <= 0:
-        return tuple((horizon, 0.0) for horizon in horizons if index + horizon in portfolio_values)
-    for horizon in horizons:
-        target = index + horizon
-        if target in portfolio_values:
-            result.append((horizon, portfolio_values[target] / current_value - 1.0))
-    return tuple(result)
+        return ()
+    return tuple(
+        (horizon, portfolio_values[index + horizon] / current_value - 1.0)
+        for horizon in horizons
+        if index + horizon in portfolio_values
+    )
 
 
 def collect_position_aware_diagnostics(
@@ -79,9 +75,8 @@ def collect_position_aware_diagnostics(
 ) -> PositionAwareDiagnostics:
     """Audit V8 decisions against portfolio state and exact immediate counterfactuals.
 
-    This function is diagnostic-only. It does not mutate learned weights. At every
-    decision it deep-copies the environment before execution so HOLD/BUY/SELL
-    immediate rewards are evaluated from the exact same portfolio state.
+    Diagnostic-only: learned weights are never updated. Each counterfactual is
+    evaluated from a deep copy of the exact pre-action environment state.
     """
     environment = CryptoTradingEnvironment(candles, max_steps=max_steps)
     encoder = SparseMarketEncoder(feature_count=environment.observation_size, winners=4)
@@ -98,12 +93,8 @@ def collect_position_aware_diagnostics(
     portfolio_values: dict[int, float] = {environment.index: environment.portfolio_value}
     exposure_changes = [[] for _ in range(3)]
     counterfactual_rewards = [[] for _ in range(3)]
-    action_returns = [[[] for _ in horizons] for _ in range(3)]
-    state_returns = [[[] for _ in horizons] for _ in range(2)]
-    buy_advantages = [[], []]
-    sell_advantages = [[], []]
-
     previous_action: int | None = None
+
     for _ in range(environment.max_steps):
         index = environment.index
         action = agent.choose_action(scores)
@@ -115,12 +106,11 @@ def collect_position_aware_diagnostics(
             action_state_transitions[previous_action][action] += 1
         previous_action = action
 
-        state_index = 0 if state_before == "FLAT" else 1
         counterfactuals: list[float] = []
         for counterfactual_action in range(3):
             trial = deepcopy(environment)
-            counterfactuals.append(trial.step(counterfactual_action).reward)
-        for counterfactual_action, reward in enumerate(counterfactuals):
+            reward = trial.step(counterfactual_action).reward
+            counterfactuals.append(reward)
             counterfactual_rewards[counterfactual_action].append(reward)
 
         result = environment.step(action)
@@ -129,17 +119,9 @@ def collect_position_aware_diagnostics(
         portfolio_after = environment.portfolio_value
         exposure_change = position_after - position_before
         exposure_changes[action].append(exposure_change)
-        position_state_transitions[state_index][0 if state_after == "FLAT" else 1] += 1
-
+        position_state_transitions[0 if state_before == "FLAT" else 1][0 if state_after == "FLAT" else 1] += 1
         portfolio_values[environment.index] = portfolio_after
-        realized_returns = _portfolio_returns(portfolio_values, index, portfolio_before, horizons)
-        for horizon, value in realized_returns:
-            horizon_index = horizons.index(horizon)
-            action_returns[action][horizon_index].append(value)
-            state_returns[state_index][horizon_index].append(value)
 
-        buy_advantages[state_index].append(scores[1] - scores[0])
-        sell_advantages[state_index].append(scores[2] - scores[0])
         records.append(
             PositionDecisionRecord(
                 index=index,
@@ -153,7 +135,7 @@ def collect_position_aware_diagnostics(
                 portfolio_value_after=portfolio_after,
                 scores=tuple(scores),
                 counterfactual_rewards=tuple(counterfactuals),
-                realized_portfolio_returns=realized_returns,
+                realized_portfolio_returns=(),
             )
         )
 
@@ -161,6 +143,38 @@ def collect_position_aware_diagnostics(
         if result.done:
             break
         scores = agent.observe(encoder.encode(result.observation))
+
+    completed_records: list[PositionDecisionRecord] = []
+    action_returns = [[[] for _ in horizons] for _ in range(3)]
+    state_returns = [[[] for _ in horizons] for _ in range(2)]
+    buy_advantages = [[], []]
+    sell_advantages = [[], []]
+
+    for record in records:
+        realized = _portfolio_returns(portfolio_values, record.index, record.portfolio_value_before, horizons)
+        state_index = 0 if record.position_state_before == "FLAT" else 1
+        for horizon, value in realized:
+            horizon_index = horizons.index(horizon)
+            action_returns[record.action][horizon_index].append(value)
+            state_returns[state_index][horizon_index].append(value)
+        buy_advantages[state_index].append(record.scores[1] - record.scores[0])
+        sell_advantages[state_index].append(record.scores[2] - record.scores[0])
+        completed_records.append(
+            PositionDecisionRecord(
+                index=record.index,
+                action=record.action,
+                position_before=record.position_before,
+                position_after=record.position_after,
+                position_state_before=record.position_state_before,
+                position_state_after=record.position_state_after,
+                exposure_change=record.exposure_change,
+                portfolio_value_before=record.portfolio_value_before,
+                portfolio_value_after=record.portfolio_value_after,
+                scores=record.scores,
+                counterfactual_rewards=record.counterfactual_rewards,
+                realized_portfolio_returns=realized,
+            )
+        )
 
     average_action_returns = tuple(
         tuple(mean(values) if values else 0.0 for values in action_horizons)
@@ -171,7 +185,7 @@ def collect_position_aware_diagnostics(
         for state_horizons in state_returns
     )
     return PositionAwareDiagnostics(
-        records=tuple(records),
+        records=tuple(completed_records),
         action_state_transitions=tuple(tuple(row) for row in action_state_transitions),
         position_state_transitions=tuple(tuple(row) for row in position_state_transitions),
         average_exposure_change_by_action=tuple(mean(values) if values else 0.0 for values in exposure_changes),
