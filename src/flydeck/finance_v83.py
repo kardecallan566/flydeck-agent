@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from copy import deepcopy
+from copy import copy
 from dataclasses import dataclass
 
 from .agent import Agent
@@ -37,14 +37,31 @@ def _counterfactual_targets(
     *,
     discount: float,
 ) -> tuple[tuple[float, ...], tuple[tuple[float, ...], ...], tuple[bool, ...]]:
-    """Evaluate reward and successor values for every action from one state."""
+    """Evaluate every action without deep-copying the full simulation graph.
+
+    The environment's market data is immutable, so a shallow copy is enough to
+    isolate its mutable episode state. The encoder only has one mutable scalar,
+    and the network's step state is isolated by copying its small state vectors;
+    its immutable Connection objects can be safely shared. This preserves the
+    exact causal successor calculation while avoiding three full deep copies per
+    decision.
+    """
     rewards: list[float] = []
     next_scores: list[tuple[float, ...]] = []
     dones: list[bool] = []
+
     for action in range(environment.action_size):
-        trial = deepcopy(environment)
-        trial_encoder = deepcopy(encoder)
-        trial_network = deepcopy(agent.network)
+        trial = copy(environment)
+        trial_encoder = copy(encoder)
+        trial_network = copy(agent.network)
+
+        # SparseNetwork.step mutates only these state vectors. Connections are
+        # frozen dataclasses and therefore safe to share between shallow copies.
+        trial_network._state = list(agent.network._state)
+        trial_network._decision_state = list(agent.network._decision_state)
+        trial_network._previous_decision_state = list(agent.network._previous_decision_state)
+        trial_network._eligibility = list(agent.network._eligibility)
+
         result = trial.step(action)
         rewards.append(result.reward)
         dones.append(result.done)
@@ -53,6 +70,7 @@ def _counterfactual_targets(
         else:
             trial_encoder.observe_action(action)
             next_scores.append(trial_network.step(trial_encoder.encode(result.observation)))
+
     return tuple(rewards), tuple(next_scores), tuple(dones)
 
 
