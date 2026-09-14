@@ -20,10 +20,14 @@ def build_degree_core_circuit(
     """Extract a bounded core from the official MaleCNS tables.
 
     The raw graph is much larger than an online Python simulation should update
-    every market tick. The weights file is scanned in Arrow record batches so
-    the full 1.1 GB table is never converted into a giant Python list.
+    every market tick. The weights file is scanned one Arrow record batch at a
+    time so the full 1.1 GB table is never converted into a giant Python list.
     Input/output pools are deterministic structural probes, not claims about
     biological sensory or motor pathways.
+
+    Feather v2 files are Arrow IPC files. ``open_file`` returns a
+    ``RecordBatchFileReader``; batches must therefore be accessed with
+    ``num_record_batches`` and ``get_batch(index)`` rather than ``iter_batches``.
     """
     try:
         import pyarrow.feather as feather
@@ -44,7 +48,8 @@ def build_degree_core_circuit(
 
     degree: Counter[int] = Counter()
     with ipc.open_file(weights_path) as reader:
-        for batch in reader.iter_batches(batch_size=1_000_000):
+        for batch_index in range(reader.num_record_batches):
+            batch = reader.get_batch(batch_index)
             columns = batch.to_pydict()
             for source, target, count in zip(
                 columns["body_pre"], columns["body_post"], columns["weight"]
@@ -67,7 +72,8 @@ def build_degree_core_circuit(
 
     edges: list[MaleCNSEdge] = []
     with ipc.open_file(weights_path) as reader:
-        for batch in reader.iter_batches(batch_size=1_000_000):
+        for batch_index in range(reader.num_record_batches):
+            batch = reader.get_batch(batch_index)
             columns = batch.to_pydict()
             for source, target, count in zip(
                 columns["body_pre"], columns["body_post"], columns["weight"]
