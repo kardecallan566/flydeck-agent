@@ -150,6 +150,7 @@ class VisualCircuitBuilder:
         status_col = "status" if "status" in cols else None
         spatial_cols = _find_spatial_columns(cols)
         selected_rows: list[tuple[int, str, float, float, float]] = []
+        skipped_spatial = {"L1": 0, "L2": 0}
         data = annotations.to_pylist()
         wanted = {name.lower() for name in MOTION_TYPES}
         for row in data:
@@ -157,15 +158,16 @@ class VisualCircuitBuilder:
                 continue
             body = row.get(body_col)
             cell_type = "" if row.get(type_col) is None else str(row[type_col]).strip()
-            if body is None or cell_type.lower() not in wanted:
+            low_type = cell_type.lower()
+            if body is None or low_type not in wanted:
                 continue
             coords = _extract_soma_xyz(row, spatial_cols)
             if coords is None:
-                if cell_type.lower() in {"l1", "l2"}:
-                    raise ValueError(
-                        "MaleCNS annotations do not expose parseable soma coordinates for L1/L2; "
-                        "refusing to build a fake retinotopic map"
-                    )
+                if low_type in {"l1", "l2"}:
+                    skipped_spatial[cell_type] = skipped_spatial.get(cell_type, 0) + 1
+                    continue
+                # Non-entry neurons do not need spatial coordinates.
+                selected_rows.append((int(body), cell_type, 0.0, 0.0, 0.0))
                 continue
             selected_rows.append((int(body), cell_type, *coords))
 
@@ -173,8 +175,17 @@ class VisualCircuitBuilder:
             raise ValueError("No named MaleCNS visual motion types were found")
 
         ids = {body for body, *_ in selected_rows}
-        raw_spatial = {body: (x, y, z) for body, _, x, y, z in selected_rows}
+        raw_spatial = {
+            body: (x, y, z)
+            for body, cell_type, x, y, z in selected_rows
+            if cell_type.lower() in {"l1", "l2"}
+        }
         selected = {body: cell_type for body, cell_type, *_ in selected_rows}
+        if not any(name.lower() == "l1" for name in selected.values()):
+            raise ValueError("MaleCNS circuit has no L1 neurons with parseable soma coordinates")
+        if not any(name.lower() == "l2" for name in selected.values()):
+            raise ValueError("MaleCNS circuit has no L2 neurons with parseable soma coordinates")
+
         value_set = pa.array(sorted(ids), type=pa.int64())
         edges_by_body: list[tuple[int, int, float]] = []
         with ipc.open_file(self.weights_path) as reader:
@@ -193,8 +204,7 @@ class VisualCircuitBuilder:
                     if int(source) != int(target)
                 )
 
-        l1_l2 = {body: raw_spatial[body] for body in ids if selected[body].lower() in {"l1", "l2"}}
-        spatial_2d = _normalize_spatial(l1_l2)
+        spatial_2d = _normalize_spatial(raw_spatial)
         nt = self._neurotransmitters()
         ordered = sorted(ids)
         index = {body: i for i, body in enumerate(ordered)}
@@ -223,6 +233,10 @@ class VisualCircuitBuilder:
         if not circuit.has_spatial_mapping:
             raise ValueError("L1/L2 spatial mapping was not created")
         circuit.save(output_path)
+        print(
+            "Spatial mapping: soma_xy_proxy; "
+            f"skipped L1={skipped_spatial['L1']}, L2={skipped_spatial['L2']} entries without soma coordinates"
+        )
         return circuit
 
     def _neurotransmitters(self) -> dict[int, str]:
