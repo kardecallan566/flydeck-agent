@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import math
 
 from .market_retina import BNBMarketRetina, RetinaStimulus
-from .visual_circuit import VisualCircuit, T4_TYPES, T5_TYPES
+from .visual_circuit import VisualCircuit
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,7 +31,11 @@ class MaleCNSVisualSystem:
         self.state = [0.0] * len(circuit.neurons)
         self.outgoing: list[list[tuple[int, float]]] = [[] for _ in circuit.neurons]
         for edge in circuit.edges:
-            self.outgoing[edge.source].append((edge.target, edge.weight * synapse_scale))
+            source_sign = circuit.neurons[edge.source].sign
+            # Predicted monoamine/modulatory or missing transmitter information
+            # is not invented as excitatory. Such edges are neutral in V1.
+            signed_weight = edge.weight * source_sign
+            self.outgoing[edge.source].append((edge.target, signed_weight * synapse_scale))
         self.last_stimulus: RetinaStimulus | None = None
 
     def reset(self) -> None:
@@ -56,13 +60,8 @@ class MaleCNSVisualSystem:
                 recurrent[target] += activity * weight
 
         next_state = [0.0] * len(self.state)
-        for index, neuron in enumerate(self.circuit.neurons):
-            input_current = drive[index] + recurrent[index]
-            # Sign is the neuron's predicted transmitter polarity. Unknown or
-            # modulatory transmitters remain neutral rather than being invented.
-            if neuron.sign < 0:
-                input_current = -input_current
-            target = math.tanh(input_current)
+        for index in range(len(next_state)):
+            target = math.tanh(drive[index] + recurrent[index])
             next_state[index] = (1.0 - self.leak) * self.state[index] + self.leak * target
         self.state = next_state
         return tuple(self.state)
@@ -70,11 +69,10 @@ class MaleCNSVisualSystem:
     def decision(self) -> VisualDecision:
         t4 = self._directional_activity(self.circuit.t4_outputs)
         t5 = self._directional_activity(self.circuit.t5_outputs)
-        # T4 is the ON-motion channel and T5 the OFF-motion channel. We map
-        # vertical upward/downward motion to UP/DOWN without assigning biological
-        # meaning to the a/b/c/d labels themselves.
-        up = max(0.0, t4[0]) + max(0.0, t5[0])
-        down = max(0.0, t4[2]) + max(0.0, t5[2])
+        # T4/T5 a,b,c,d are front-to-back, back-to-front, upward and downward.
+        # For the artificial market retina, only c/d map to vertical price motion.
+        up = max(0.0, t4[2]) + max(0.0, t5[2])
+        down = max(0.0, t4[3]) + max(0.0, t5[3])
         total = up + down
         confidence = 0.0 if total <= 1e-12 else abs(up - down) / total
         return VisualDecision(up, down, confidence, confidence < 0.20)
