@@ -3,7 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
+from .directional_mechanism import SpatialOffsetDirectionalMechanism
 from .market_retina import BNBMarketRetina, RetinaStimulus
+from .receptive_fields import infer_receptive_fields
 from .visual_circuit import VisualCircuit
 
 
@@ -27,6 +29,7 @@ class MaleCNSVisualSystem:
         micro_steps: int = 4,
         fast_alpha: float = 0.75,
         slow_inhibition_alpha: float = 0.20,
+        receptive_field_iterations: int = 12,
     ) -> None:
         if (
             not 0.0 < leak <= 1.0
@@ -35,6 +38,7 @@ class MaleCNSVisualSystem:
             or micro_steps < 1
             or not 0.0 < fast_alpha <= 1.0
             or not 0.0 < slow_inhibition_alpha <= 1.0
+            or receptive_field_iterations < 1
         ):
             raise ValueError("invalid visual dynamics")
         if not circuit.l1_inputs or not circuit.l2_inputs:
@@ -49,6 +53,7 @@ class MaleCNSVisualSystem:
         self.micro_steps = micro_steps
         self.fast_alpha = fast_alpha
         self.slow_inhibition_alpha = slow_inhibition_alpha
+        self.receptive_field_iterations = receptive_field_iterations
         self.state = [0.0] * len(circuit.neurons)
         self.filtered_state = [0.0] * len(circuit.neurons)
         self.outgoing: list[list[tuple[int, float]]] = [[] for _ in circuit.neurons]
@@ -67,6 +72,21 @@ class MaleCNSVisualSystem:
                 (edge.target, normalized * source_sign * synapse_scale)
             )
 
+        # Directional selectivity is computed from the connectome-derived
+        # spatially offset excitation/inhibition components of each T4/T5 RF.
+        # This replaces a direction-aware output heuristic with an explicit
+        # causal fast-E / slow-I mechanism.
+        self.receptive_fields = infer_receptive_fields(
+            circuit,
+            iterations=receptive_field_iterations,
+        )
+        self.directional = SpatialOffsetDirectionalMechanism(
+            self.receptive_fields,
+            inhibition_alpha=slow_inhibition_alpha,
+        )
+        self.last_directional_t4 = (0.0, 0.0, 0.0, 0.0)
+        self.last_directional_t5 = (0.0, 0.0, 0.0, 0.0)
+
         self.last_stimulus: RetinaStimulus | None = None
         self.last_entry_drive = [0.0] * len(circuit.neurons)
         self.previous_on_field: tuple[tuple[float, ...], ...] | None = None
@@ -79,6 +99,9 @@ class MaleCNSVisualSystem:
         self.last_entry_drive = [0.0] * len(self.state)
         self.previous_on_field = None
         self.previous_off_field = None
+        self.directional.reset()
+        self.last_directional_t4 = (0.0, 0.0, 0.0, 0.0)
+        self.last_directional_t5 = (0.0, 0.0, 0.0, 0.0)
 
     def step(self, stimulus: RetinaStimulus) -> tuple[float, ...]:
         self.last_stimulus = stimulus
@@ -88,10 +111,9 @@ class MaleCNSVisualSystem:
         for _ in range(self.micro_steps):
             recurrent = [0.0] * len(self.state)
 
-            # Direction selectivity in T4 is strongly tied to fast excitation
-            # and slower, spatially offset inhibition. We model that temporal
-            # asymmetry at the synaptic-source level instead of hard-coding a
-            # preferred direction into the output readout.
+            # Upstream visual dynamics use fast excitatory and slow inhibitory
+            # source filtering. Directional T4/T5 computation is applied after
+            # this recurrent propagation using their spatially offset RFs.
             for source, outgoing in enumerate(self.outgoing):
                 activity = self.state[source]
                 if activity <= 1e-12:
@@ -107,6 +129,27 @@ class MaleCNSVisualSystem:
                 target = max(0.0, math.tanh(drive[index] + recurrent[index]))
                 next_state[index] = (1.0 - self.leak) * self.state[index] + self.leak * target
             self.state = next_state
+
+        # T4 is the ON motion detector and T5 is the OFF motion detector. The
+        # mechanism uses only the visual fields and propagated RF coordinates;
+        # no direction metadata or hard-coded preferred subtype is involved.
+        self.last_directional_t4 = self.directional.step(
+            stimulus,
+            self.circuit.t4_outputs,
+            polarity="on",
+        )
+        self.last_directional_t5 = self.directional.step(
+            stimulus,
+            self.circuit.t5_outputs,
+            polarity="off",
+        )
+        for groups, values in (
+            (self.circuit.t4_outputs, self.last_directional_t4),
+            (self.circuit.t5_outputs, self.last_directional_t5),
+        ):
+            for group, value in zip(groups, values):
+                for index in group:
+                    self.state[index] = value
 
         self.previous_on_field = stimulus.on_field
         self.previous_off_field = stimulus.off_field
