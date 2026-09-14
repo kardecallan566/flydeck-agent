@@ -74,6 +74,26 @@ def test_spatial_entry_mapping_produces_local_drive() -> None:
     assert visual.last_entry_drive[3] == 0.0
 
 
+def test_neural_state_is_nonnegative() -> None:
+    visual = MaleCNSVisualSystem(_circuit())
+    sequence = make_motion_sequence("right", width=8, height=8, steps=6)
+    for stimulus in sequence:
+        state = visual.step(stimulus)
+        assert all(value >= 0.0 for value in state)
+
+
+def test_temporal_adaptation_adds_transient_drive() -> None:
+    visual = MaleCNSVisualSystem(_circuit(), temporal_gain=1.0)
+    first = make_motion_stimulus("right", width=8, height=8, position=0.2)
+    second = make_motion_stimulus("right", width=8, height=8, position=0.8)
+    visual.step(first)
+    first_drive = tuple(visual.last_entry_drive)
+    visual.step(second)
+    second_drive = tuple(visual.last_entry_drive)
+    assert max(second_drive) >= max(first_drive)
+    assert any(second > first for first, second in zip(first_drive, second_drive))
+
+
 def test_motion_diagnostic_returns_temporal_trace() -> None:
     result = run_motion_diagnostic(_circuit(), direction="down", polarity="off", steps=5)
     assert result.name == "OFF_DOWN"
