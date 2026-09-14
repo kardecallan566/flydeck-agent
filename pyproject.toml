@@ -17,6 +17,7 @@ flydeck = "flydeck.cli:main"
 flydeck-bnb = "flydeck.bnb_prediction_cli:main"
 flydeck-visual-build = "flydeck.visual_cli:main"
 flydeck-bnb-visual = "flydeck.bnb_visual_cli:main"
+flydeck-visual-diagnostics = "flydeck.visual_diagnostics_cli:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
