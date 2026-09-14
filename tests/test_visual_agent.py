@@ -5,8 +5,8 @@ from flydeck.visual_circuit import VisualCircuit, VisualEdge, VisualNeuron
 
 def _circuit() -> VisualCircuit:
     neurons = (
-        VisualNeuron(1, "L1", "visual_entry", "acetylcholine", 1.0),
-        VisualNeuron(2, "L2", "visual_entry", "acetylcholine", 1.0),
+        VisualNeuron(1, "L1", "visual_entry", "acetylcholine", 1.0, 0.0, 0.5),
+        VisualNeuron(2, "L2", "visual_entry", "acetylcholine", 1.0, 1.0, 0.5),
         VisualNeuron(3, "T4c", "motion_detector", "acetylcholine", 1.0),
         VisualNeuron(4, "T4d", "motion_detector", "acetylcholine", 1.0),
         VisualNeuron(5, "T5c", "motion_detector", "acetylcholine", 1.0),
@@ -19,6 +19,7 @@ def _circuit() -> VisualCircuit:
         l2_inputs=(1,),
         t4_outputs=((), (), (2,), (3,)),
         t5_outputs=((), (), (4,), (5,)),
+        spatial_mode="soma_xy_proxy",
     )
 
 
@@ -52,6 +53,15 @@ def test_visual_circuit_round_trip(tmp_path) -> None:
     assert loaded.l2_inputs == circuit.l2_inputs
     assert loaded.t4_outputs == circuit.t4_outputs
     assert loaded.t5_outputs == circuit.t5_outputs
+    assert loaded.spatial_mode == "soma_xy_proxy"
+    assert loaded.has_spatial_mapping
+
+
+def test_visual_agent_uses_local_spatial_stimulation() -> None:
+    agent = FlyVisualPredictionAgent(_circuit(), retina_width=8, retina_height=6)
+    stimulus, _decision = agent.perceive((100.0, 100.5, 101.0, 102.0, 103.0))
+    assert agent.visual.last_entry_drive[0] == stimulus.on_field[3][0]
+    assert agent.visual.last_entry_drive[1] == stimulus.off_field[3][7]
 
 
 def test_visual_agent_returns_valid_decision() -> None:
