@@ -25,11 +25,11 @@ def make_motion_stimulus(
     polarity: str = "on",
     position: float = 0.5,
 ) -> RetinaStimulus:
-    """Create a controlled visual edge for circuit validation.
+    """Create one controlled visual edge frame for circuit validation.
 
-    This is a laboratory stimulus, not a financial feature. It lets us test
-    whether the extracted MaleCNS pathway distinguishes spatial/temporal
-    motion before BNB data are introduced.
+    This is a laboratory stimulus, not a financial feature. The actual visual
+    input is the ON/OFF field; the metadata channels are deliberately neutral
+    so the circuit cannot receive the answer through a direction feature.
     """
     if width < 4 or height < 4:
         raise ValueError("stimulus dimensions are too small")
@@ -37,26 +37,64 @@ def make_motion_stimulus(
         raise ValueError("direction must be 'up' or 'down'")
     if polarity not in {"on", "off"}:
         raise ValueError("polarity must be 'on' or 'off'")
-    y = min(height - 1, max(0, int(round(position * (height - 1)))))
+    if not 0.0 <= position <= 1.0:
+        raise ValueError("position must be between 0 and 1")
+
+    y = int(round(position * (height - 1)))
     on = [[0.0] * width for _ in range(height)]
     off = [[0.0] * width for _ in range(height)]
     field = on if polarity == "on" else off
 
+    # A horizontal luminance edge is the object. Direction is represented by
+    # its displacement between consecutive frames, not by this frame itself.
     for x in range(width):
-        if direction == "up":
-            row = min(height - 1, y + int(round(x / max(1, width - 1) * (height - 1 - y))))
-        else:
-            row = max(0, y - int(round(x / max(1, width - 1) * y)))
-        field[row][x] = 1.0
+        field[y][x] = 1.0
 
     vertical = 1.0 if direction == "up" else -1.0
     return RetinaStimulus(
         on_field=tuple(tuple(row) for row in on),
         off_field=tuple(tuple(row) for row in off),
-        directions=(0.0, 0.0, 1.0 if direction == "up" else 0.0, 1.0 if direction == "down" else 0.0),
+        directions=(0.0, 0.0, 0.0, 0.0),
         coherence=1.0,
         velocity=vertical,
         acceleration=0.0,
+    )
+
+
+def make_motion_sequence(
+    direction: str,
+    *,
+    width: int = 32,
+    height: int = 16,
+    polarity: str = "on",
+    steps: int = 12,
+    start: float = 0.15,
+    end: float = 0.85,
+) -> tuple[RetinaStimulus, ...]:
+    """Create a causal sequence where the same edge moves across the field."""
+    if steps < 2:
+        raise ValueError("steps must be at least two")
+    if direction not in {"up", "down"}:
+        raise ValueError("direction must be 'up' or 'down'")
+    if not 0.0 <= start <= 1.0 or not 0.0 <= end <= 1.0:
+        raise ValueError("start and end must be between 0 and 1")
+
+    if direction == "down":
+        start, end = end, start
+
+    positions = [
+        start + (end - start) * index / (steps - 1)
+        for index in range(steps)
+    ]
+    return tuple(
+        make_motion_stimulus(
+            direction,
+            width=width,
+            height=height,
+            polarity=polarity,
+            position=position,
+        )
+        for position in positions
     )
 
 
@@ -67,12 +105,10 @@ def run_motion_diagnostic(
     polarity: str = "on",
     steps: int = 12,
 ) -> MotionDiagnostic:
-    """Run one controlled motion through the real extracted circuit."""
-    if steps < 1:
-        raise ValueError("steps must be positive")
+    """Run one causal motion sequence through the real extracted circuit."""
+    sequence = make_motion_sequence(direction, polarity=polarity, steps=steps)
     visual = MaleCNSVisualSystem(circuit)
-    stimulus = make_motion_stimulus(direction, polarity=polarity)
-    for _ in range(steps):
+    for stimulus in sequence:
         visual.step(stimulus)
     decision = visual.decision(minimum_confidence=0.0)
     t4 = visual._directional_activity(circuit.t4_outputs)
