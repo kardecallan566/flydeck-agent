@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from flydeck.finance import SyntheticCryptoMarket
-from flydeck.finance_data import RealMarketDataset
-from flydeck.finance_malecns_real import run_malecns_real_benchmark
+from flydeck.finance_malecns_real import RealMarketDataset, run_malecns_real_benchmark
 from flydeck.malecns import MaleCNSEdge, MaleCNSCircuit, MaleCNSNeuron
 
 
