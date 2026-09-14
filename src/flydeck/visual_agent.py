@@ -74,13 +74,15 @@ class MaleCNSVisualSystem:
 
         # Directional selectivity is computed from the connectome-derived
         # spatially offset excitation/inhibition components of each T4/T5 RF.
-        # This replaces a direction-aware output heuristic with an explicit
-        # causal fast-E / slow-I mechanism.
         self.receptive_fields = infer_receptive_fields(
             circuit,
             iterations=receptive_field_iterations,
         )
-        self.directional = SpatialOffsetDirectionalMechanism(
+        self.t4_directional = SpatialOffsetDirectionalMechanism(
+            self.receptive_fields,
+            inhibition_alpha=slow_inhibition_alpha,
+        )
+        self.t5_directional = SpatialOffsetDirectionalMechanism(
             self.receptive_fields,
             inhibition_alpha=slow_inhibition_alpha,
         )
@@ -99,7 +101,8 @@ class MaleCNSVisualSystem:
         self.last_entry_drive = [0.0] * len(self.state)
         self.previous_on_field = None
         self.previous_off_field = None
-        self.directional.reset()
+        self.t4_directional.reset()
+        self.t5_directional.reset()
         self.last_directional_t4 = (0.0, 0.0, 0.0, 0.0)
         self.last_directional_t5 = (0.0, 0.0, 0.0, 0.0)
 
@@ -130,15 +133,15 @@ class MaleCNSVisualSystem:
                 next_state[index] = (1.0 - self.leak) * self.state[index] + self.leak * target
             self.state = next_state
 
-        # T4 is the ON motion detector and T5 is the OFF motion detector. The
-        # mechanism uses only the visual fields and propagated RF coordinates;
-        # no direction metadata or hard-coded preferred subtype is involved.
-        self.last_directional_t4 = self.directional.step(
+        # T4 is the ON motion detector and T5 is the OFF motion detector. Each
+        # population owns its temporal trace so ON and OFF do not contaminate
+        # each other's inhibition state.
+        self.last_directional_t4 = self.t4_directional.step(
             stimulus,
             self.circuit.t4_outputs,
             polarity="on",
         )
-        self.last_directional_t5 = self.directional.step(
+        self.last_directional_t5 = self.t5_directional.step(
             stimulus,
             self.circuit.t5_outputs,
             polarity="off",
