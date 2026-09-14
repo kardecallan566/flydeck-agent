@@ -18,8 +18,14 @@ class VisualDecision:
 class MaleCNSVisualSystem:
     """Run the compact, connectivity-preserving MaleCNS motion pathway."""
 
-    def __init__(self, circuit: VisualCircuit, leak: float = 0.15, synapse_scale: float = 0.015) -> None:
-        if not 0.0 < leak <= 1.0 or synapse_scale <= 0:
+    def __init__(
+        self,
+        circuit: VisualCircuit,
+        leak: float = 0.15,
+        synapse_scale: float = 0.45,
+        temporal_gain: float = 0.75,
+    ) -> None:
+        if not 0.0 < leak <= 1.0 or synapse_scale <= 0.0 or temporal_gain < 0.0:
             raise ValueError("invalid visual dynamics")
         if not circuit.l1_inputs or not circuit.l2_inputs:
             raise ValueError("visual circuit requires L1 and L2 entry neurons")
@@ -28,18 +34,37 @@ class MaleCNSVisualSystem:
         self.circuit = circuit
         self.leak = leak
         self.synapse_scale = synapse_scale
+        self.temporal_gain = temporal_gain
         self.state = [0.0] * len(circuit.neurons)
         self.outgoing: list[list[tuple[int, float]]] = [[] for _ in circuit.neurons]
+
+        # MaleCNS weights are synapse counts. Normalizing the total incoming
+        # magnitude per target keeps high-degree neurons from saturating the
+        # tanh nonlinearity and preserves the relative biological weights.
+        incoming = [0.0] * len(circuit.neurons)
         for edge in circuit.edges:
-            sign = circuit.neurons[edge.source].sign
-            self.outgoing[edge.source].append((edge.target, edge.weight * sign * synapse_scale))
+            source_sign = circuit.neurons[edge.source].sign
+            incoming[edge.target] += abs(edge.weight * source_sign)
+
+        for edge in circuit.edges:
+            source_sign = circuit.neurons[edge.source].sign
+            total = incoming[edge.target]
+            normalized = edge.weight / total if total > 1e-12 else 0.0
+            self.outgoing[edge.source].append(
+                (edge.target, normalized * source_sign * synapse_scale)
+            )
+
         self.last_stimulus: RetinaStimulus | None = None
         self.last_entry_drive = [0.0] * len(circuit.neurons)
+        self.previous_on_field: tuple[tuple[float, ...], ...] | None = None
+        self.previous_off_field: tuple[tuple[float, ...], ...] | None = None
 
     def reset(self) -> None:
         self.state = [0.0] * len(self.state)
         self.last_stimulus = None
         self.last_entry_drive = [0.0] * len(self.state)
+        self.previous_on_field = None
+        self.previous_off_field = None
 
     def step(self, stimulus: RetinaStimulus) -> tuple[float, ...]:
         self.last_stimulus = stimulus
@@ -47,39 +72,53 @@ class MaleCNSVisualSystem:
 
         # The artificial retina is 2-D: x is the time axis and y is price.
         # Real MaleCNS L1/L2 cells retain their normalized soma position. Each
-        # entry neuron therefore samples the corresponding local visual patch
-        # instead of receiving one global ON/OFF maximum.
+        # entry neuron samples its local visual patch instead of one global
+        # ON/OFF maximum.
         if self.circuit.has_spatial_mapping:
             for neuron in self.circuit.l1_inputs:
                 n = self.circuit.neurons[neuron]
-                drive[neuron] = _sample_field(stimulus.on_field, n.spatial_x, n.spatial_y)
+                current = _sample_field(stimulus.on_field, n.spatial_x, n.spatial_y)
+                previous = _sample_field(self.previous_on_field, n.spatial_x, n.spatial_y)
+                drive[neuron] = current + self.temporal_gain * max(0.0, current - previous)
             for neuron in self.circuit.l2_inputs:
                 n = self.circuit.neurons[neuron]
-                drive[neuron] = _sample_field(stimulus.off_field, n.spatial_x, n.spatial_y)
+                current = _sample_field(stimulus.off_field, n.spatial_x, n.spatial_y)
+                previous = _sample_field(self.previous_off_field, n.spatial_x, n.spatial_y)
+                drive[neuron] = current + self.temporal_gain * max(0.0, current - previous)
         else:
             # Legacy/synthetic circuits can still run, but this path is not
             # considered a retinotopic MaleCNS build.
             on_strength = max((max(row) for row in stimulus.on_field), default=0.0)
             off_strength = max((max(row) for row in stimulus.off_field), default=0.0)
+            previous_on = max(
+                (max(row) for row in self.previous_on_field), default=0.0
+            )
+            previous_off = max(
+                (max(row) for row in self.previous_off_field), default=0.0
+            )
+            on_strength += self.temporal_gain * max(0.0, on_strength - previous_on)
+            off_strength += self.temporal_gain * max(0.0, off_strength - previous_off)
             for neuron in self.circuit.l1_inputs:
-                drive[neuron] += on_strength
+                drive[neuron] = on_strength
             for neuron in self.circuit.l2_inputs:
-                drive[neuron] += off_strength
+                drive[neuron] = off_strength
 
         self.last_entry_drive = drive
         recurrent = [0.0] * len(self.state)
         for source, outgoing in enumerate(self.outgoing):
             activity = self.state[source]
-            if abs(activity) < 1e-12:
+            if activity <= 1e-12:
                 continue
             for target, weight in outgoing:
                 recurrent[target] += activity * weight
 
         next_state = [0.0] * len(self.state)
         for index in range(len(next_state)):
-            target = math.tanh(drive[index] + recurrent[index])
+            target = max(0.0, math.tanh(drive[index] + recurrent[index]))
             next_state[index] = (1.0 - self.leak) * self.state[index] + self.leak * target
         self.state = next_state
+        self.previous_on_field = stimulus.on_field
+        self.previous_off_field = stimulus.off_field
         return tuple(self.state)
 
     def decision(self, minimum_confidence: float = 0.20) -> VisualDecision:
@@ -160,7 +199,7 @@ class FlyVisualPredictionAgent:
 
 
 def _sample_field(
-    field: tuple[tuple[float, ...], ...],
+    field: tuple[tuple[float, ...], ...] | None,
     spatial_x: float | None,
     spatial_y: float | None,
 ) -> float:
