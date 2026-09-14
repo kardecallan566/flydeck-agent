@@ -73,22 +73,20 @@ class MaleCNSCircuit:
             "schema_version": 1,
             "source": "MaleCNS v1.0",
             "neurons": [
-                {
-                    "body_id": n.body_id,
-                    "role": n.role,
-                    "neurotransmitter": n.neurotransmitter,
-                }
+                {"body_id": n.body_id, "role": n.role, "neurotransmitter": n.neurotransmitter}
                 for n in self.neurons
             ],
             "edges": [[e.source, e.target, e.weight] for e in self.edges],
             "input_neurons": [list(group) for group in self.input_neurons],
             "output_neurons": [list(group) for group in self.output_neurons],
         }
-        Path(path).write_text(json.dumps(payload, separators=(",", ":")) + "\n", encoding="utf-8")
+        Path(path).write_text(
+            json.dumps(payload, separators=(",", ":")) + "\n", encoding="utf-8"
+        )
 
 
 def download_malecns_data(directory: str | Path) -> dict[str, Path]:
-    """Download the official compact inputs; raw data is never committed."""
+    """Download official MaleCNS inputs; raw data is never committed."""
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     files = {
@@ -110,8 +108,8 @@ class MaleCNSReservoir:
 
     The connectome is frozen in V1. Market features are injected into explicit
     input neuron pools and three action pools are decoded from neuron activity.
-    Only the small action readout is trainable; this isolates the value of the
-    biological topology before introducing synaptic plasticity.
+    Only the small action readout is trainable; this isolates biological
+    topology before introducing synaptic plasticity.
     """
 
     def __init__(
@@ -138,7 +136,8 @@ class MaleCNSReservoir:
         self.leak = leak
         self.activation_scale = activation_scale
         self._state = [0.0] * len(circuit.neurons)
-        self._readout = [random.Random(seed).uniform(-0.1, 0.1) for _ in range(action_count)]
+        rng = random.Random(seed)
+        self._readout = [rng.uniform(-0.1, 0.1) for _ in range(action_count)]
         self._readout_bias = [0.0] * action_count
         self._outgoing: list[list[tuple[int, float]]] = [[] for _ in circuit.neurons]
         for edge in circuit.edges:
@@ -176,22 +175,42 @@ class MaleCNSReservoir:
             next_state[index] = (1.0 - self.leak) * self._state[index] + target
         self._state = next_state
 
+        return tuple(self.action_scores())
+
+    def action_scores(self) -> tuple[float, ...]:
         scores = []
         for action, pool in enumerate(self.circuit.output_neurons):
             activity = sum(self._state[index] for index in pool) / max(1, len(pool))
             scores.append(activity * self._readout[action] + self._readout_bias[action])
         return tuple(scores)
 
-    def update_readout(self, action: int, td_error: float, learning_rate: float = 0.005) -> None:
+    def action_activity(self, action: int) -> float:
+        if not 0 <= action < self.action_count:
+            raise ValueError("action is outside the output range")
+        pool = self.circuit.output_neurons[action]
+        return sum(self._state[index] for index in pool) / max(1, len(pool))
+
+    def update_readout(
+        self,
+        action: int,
+        td_error: float,
+        learning_rate: float = 0.005,
+        activity: float | None = None,
+    ) -> None:
         if not 0 <= action < self.action_count:
             raise ValueError("action is outside the output range")
         if learning_rate <= 0:
             raise ValueError("learning_rate must be > 0")
-        activity = sum(
-            self._state[index] for index in self.circuit.output_neurons[action]
-        ) / max(1, len(self.circuit.output_neurons[action]))
-        self._readout[action] = max(-2.0, min(2.0, self._readout[action] + learning_rate * td_error * activity))
-        self._readout_bias[action] = max(-2.0, min(2.0, self._readout_bias[action] + learning_rate * td_error))
+        if activity is None:
+            activity = self.action_activity(action)
+        self._readout[action] = max(
+            -2.0,
+            min(2.0, self._readout[action] + learning_rate * td_error * activity),
+        )
+        self._readout_bias[action] = max(
+            -2.0,
+            min(2.0, self._readout_bias[action] + learning_rate * td_error),
+        )
 
     @property
     def neuron_count(self) -> int:
