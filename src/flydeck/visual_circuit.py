@@ -149,7 +149,7 @@ class VisualCircuitBuilder:
         type_col = _first(cols, "type", "cell_type", "cellType")
         status_col = "status" if "status" in cols else None
         spatial_cols = _find_spatial_columns(cols)
-        selected_rows: list[tuple[int, str, float, float]] = []
+        selected_rows: list[tuple[int, str, float, float, float]] = []
         data = annotations.to_pylist()
         wanted = {name.lower() for name in MOTION_TYPES}
         for row in data:
@@ -299,15 +299,16 @@ def _extract_soma_xyz(
     value = row.get(location_col)
     if isinstance(value, dict):
         keys = {str(k).lower(): v for k, v in value.items()}
+        coordinate_values: list[float] = []
         for names in (("x", "soma_x"), ("y", "soma_y"), ("z", "soma_z")):
             found = next((keys[name] for name in names if name in keys), None)
             if found is None:
                 return None
             try:
-                coords = tuple(float(keys[name]) for name in ("x", "y", "z"))
-                return coords  # type: ignore[return-value]
-            except (KeyError, TypeError, ValueError):
+                coordinate_values.append(float(found))
+            except (TypeError, ValueError):
                 return None
+        return tuple(coordinate_values)  # type: ignore[return-value]
     if isinstance(value, (list, tuple)) and len(value) >= 3:
         try:
             return float(value[0]), float(value[1]), float(value[2])
