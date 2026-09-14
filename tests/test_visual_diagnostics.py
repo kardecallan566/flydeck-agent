@@ -1,6 +1,7 @@
 from flydeck.visual_agent import MaleCNSVisualSystem
 from flydeck.visual_circuit import VisualCircuit, VisualEdge, VisualNeuron
 from flydeck.visual_diagnostics import (
+    DIRECTIONS,
     make_motion_sequence,
     make_motion_stimulus,
     run_motion_diagnostic,
@@ -46,12 +47,22 @@ def test_controlled_stimulus_is_spatial_and_causal() -> None:
 def test_motion_sequence_changes_position_over_time() -> None:
     up = make_motion_sequence("up", width=8, height=8, steps=5)
     down = make_motion_sequence("down", width=8, height=8, steps=5)
+    right = make_motion_sequence("right", width=8, height=8, steps=5)
+    left = make_motion_sequence("left", width=8, height=8, steps=5)
+
     up_rows = [next(y for y, row in enumerate(item.on_field) if any(row)) for item in up]
     down_rows = [next(y for y, row in enumerate(item.on_field) if any(row)) for item in down]
+    right_cols = [next(x for x in range(8) if any(row[x] for row in item.on_field)) for item in right]
+    left_cols = [next(x for x in range(8) if any(row[x] for row in item.on_field)) for item in left]
+
     assert up_rows[0] < up_rows[-1]
     assert down_rows[0] > down_rows[-1]
+    assert right_cols[0] < right_cols[-1]
+    assert left_cols[0] > left_cols[-1]
     assert len(set(up_rows)) > 1
     assert len(set(down_rows)) > 1
+    assert len(set(right_cols)) > 1
+    assert len(set(left_cols)) > 1
 
 
 def test_spatial_entry_mapping_produces_local_drive() -> None:
@@ -63,15 +74,22 @@ def test_spatial_entry_mapping_produces_local_drive() -> None:
     assert visual.last_entry_drive[3] == 0.0
 
 
-def test_motion_diagnostic_returns_all_directional_groups() -> None:
-    result = run_motion_diagnostic(_circuit(), direction="down", polarity="off")
+def test_motion_diagnostic_returns_temporal_trace() -> None:
+    result = run_motion_diagnostic(_circuit(), direction="down", polarity="off", steps=5)
     assert result.name == "OFF_DOWN"
     assert len(result.t4) == 4
     assert len(result.t5) == 4
+    assert len(result.temporal_t4) == 5
+    assert len(result.temporal_t5) == 5
+    assert all(len(frame) == 4 for frame in result.temporal_t4)
     assert result.up_score >= 0.0
     assert result.down_score >= 0.0
 
 
-def test_motion_suite_contains_on_off_up_down_controls() -> None:
+def test_motion_suite_covers_four_directions_and_polarities() -> None:
     results = run_motion_suite(_circuit(), steps=5)
-    assert [item.name for item in results] == ["ON_UP", "ON_DOWN", "OFF_UP", "OFF_DOWN"]
+    assert [item.name for item in results] == [
+        "ON_RIGHT", "ON_LEFT", "ON_UP", "ON_DOWN",
+        "OFF_RIGHT", "OFF_LEFT", "OFF_UP", "OFF_DOWN",
+    ]
+    assert all(item.direction in DIRECTIONS for item in results)
