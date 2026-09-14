@@ -11,7 +11,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Build the MaleCNS visual motion subnetwork")
     parser.add_argument("--annotations", required=True, type=Path)
     parser.add_argument("--weights", required=True, type=Path)
-    parser.add_argument("--neurotransmitters", type=Path)
+    parser.add_argument("--neurotransmitters", required=True, type=Path)
     parser.add_argument("--output", default=Path("data/malecns_visual.json"), type=Path)
     args = parser.parse_args()
 
