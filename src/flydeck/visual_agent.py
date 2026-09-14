@@ -16,7 +16,7 @@ class VisualDecision:
 
 
 class MaleCNSVisualSystem:
-    """Run the compact, connectivity-preserving MaleCNS motion pathway."""
+    """Run the compact MaleCNS motion pathway with temporal synaptic filtering."""
 
     def __init__(
         self,
@@ -25,24 +25,37 @@ class MaleCNSVisualSystem:
         synapse_scale: float = 1.20,
         temporal_gain: float = 0.75,
         micro_steps: int = 4,
+        fast_alpha: float = 0.75,
+        slow_inhibition_alpha: float = 0.20,
     ) -> None:
-        if not 0.0 < leak <= 1.0 or synapse_scale <= 0.0 or temporal_gain < 0.0 or micro_steps < 1:
+        if (
+            not 0.0 < leak <= 1.0
+            or synapse_scale <= 0.0
+            or temporal_gain < 0.0
+            or micro_steps < 1
+            or not 0.0 < fast_alpha <= 1.0
+            or not 0.0 < slow_inhibition_alpha <= 1.0
+        ):
             raise ValueError("invalid visual dynamics")
         if not circuit.l1_inputs or not circuit.l2_inputs:
             raise ValueError("visual circuit requires L1 and L2 entry neurons")
         if len(circuit.t4_outputs) != 4 or len(circuit.t5_outputs) != 4:
             raise ValueError("visual circuit requires four T4 and four T5 output groups")
+
         self.circuit = circuit
         self.leak = leak
         self.synapse_scale = synapse_scale
         self.temporal_gain = temporal_gain
         self.micro_steps = micro_steps
+        self.fast_alpha = fast_alpha
+        self.slow_inhibition_alpha = slow_inhibition_alpha
         self.state = [0.0] * len(circuit.neurons)
+        self.filtered_state = [0.0] * len(circuit.neurons)
         self.outgoing: list[list[tuple[int, float]]] = [[] for _ in circuit.neurons]
 
-        # Normalize each target's incoming synapse mass. This preserves the
-        # relative MaleCNS connection weights without letting high-degree cells
-        # dominate the rate dynamics.
+        # Normalize incoming synapse mass. The sign remains attached to the
+        # source neuron, so inhibitory MaleCNS transmitters suppress downstream
+        # activity without creating negative firing rates.
         incoming = [0.0] * len(circuit.neurons)
         for edge in circuit.edges:
             incoming[edge.target] += abs(edge.weight)
@@ -61,6 +74,7 @@ class MaleCNSVisualSystem:
 
     def reset(self) -> None:
         self.state = [0.0] * len(self.state)
+        self.filtered_state = [0.0] * len(self.state)
         self.last_stimulus = None
         self.last_entry_drive = [0.0] * len(self.state)
         self.previous_on_field = None
@@ -71,18 +85,22 @@ class MaleCNSVisualSystem:
         drive = self._entry_drive(stimulus)
         self.last_entry_drive = drive
 
-        # A real extracted pathway can be many synapses deep. One Euler update
-        # per frame would attenuate a signal before it can reach T4/T5. Multiple
-        # bounded micro-steps let activity propagate through the selected graph
-        # while retaining leak and temporal state between visual frames.
         for _ in range(self.micro_steps):
             recurrent = [0.0] * len(self.state)
+
+            # Direction selectivity in T4 is strongly tied to fast excitation
+            # and slower, spatially offset inhibition. We model that temporal
+            # asymmetry at the synaptic-source level instead of hard-coding a
+            # preferred direction into the output readout.
             for source, outgoing in enumerate(self.outgoing):
                 activity = self.state[source]
                 if activity <= 1e-12:
+                    self.filtered_state[source] *= self._alpha(source)
                     continue
+                alpha = self._alpha(source)
+                self.filtered_state[source] += alpha * (activity - self.filtered_state[source])
                 for target, weight in outgoing:
-                    recurrent[target] += activity * weight
+                    recurrent[target] += self.filtered_state[source] * weight
 
             next_state = [0.0] * len(self.state)
             for index in range(len(next_state)):
@@ -93,6 +111,12 @@ class MaleCNSVisualSystem:
         self.previous_on_field = stimulus.on_field
         self.previous_off_field = stimulus.off_field
         return tuple(self.state)
+
+    def _alpha(self, index: int) -> float:
+        neuron = self.circuit.neurons[index]
+        if neuron.sign < 0.0:
+            return self.slow_inhibition_alpha
+        return self.fast_alpha
 
     def _entry_drive(self, stimulus: RetinaStimulus) -> list[float]:
         drive = [0.0] * len(self.state)
