@@ -43,20 +43,20 @@ class V11Diagnostics:
 
 
 def build_random_topology(circuit: MaleCNSCircuit, *, seed: int = 123) -> MaleCNSCircuit:
-    """Create a topology control with identical neuron/pool sizes and edge count."""
+    """Create a topology control with identical neurons, pools, edges and weight distribution."""
     rng = random.Random(seed)
     count = len(circuit.neurons)
     used: set[tuple[int, int]] = set()
     edges: list[MaleCNSEdge] = []
-    target_edges = len(circuit.edges)
-    while len(edges) < target_edges:
+    weights = [edge.weight for edge in circuit.edges]
+    while len(edges) < len(circuit.edges):
         source = rng.randrange(count)
         target = rng.randrange(count)
         key = (source, target)
         if key in used:
             continue
         used.add(key)
-        weight = rng.uniform(-0.5, 0.5)
+        weight = weights[len(edges)]
         edges.append(MaleCNSEdge(source, target, weight))
     neurons = tuple(MaleCNSNeuron(n.body_id, n.role, n.neurotransmitter) for n in circuit.neurons)
     return MaleCNSCircuit(neurons, tuple(edges), circuit.input_neurons, circuit.output_neurons)
@@ -82,8 +82,6 @@ def run_v11_diagnostics(
     scores = reservoir.step(observation)
     epsilon = train_epsilon
     checkpoints: list[Checkpoint] = []
-    td_sum = 0.0
-    reward_sum = 0.0
     interval_td = 0.0
     interval_reward = 0.0
     interval_count = 0
@@ -92,23 +90,20 @@ def run_v11_diagnostics(
         action = _choose_action(scores, epsilon, rng)
         activity = reservoir.action_activity(action)
         result = environment.step(action)
-        reward_sum += result.reward
         interval_reward += result.reward
         next_scores = (0.0, 0.0, 0.0) if result.done else reservoir.step(result.observation)
         target = result.reward if result.done else result.reward + discount * max(next_scores)
         td_error = max(-1.0, min(1.0, target - scores[action]))
         reservoir.update_readout(action, td_error, learning_rate, activity)
-        td_sum += abs(td_error)
         interval_td += abs(td_error)
         interval_count += 1
         scores = next_scores
         epsilon = max(min_epsilon, epsilon * train_epsilon_decay)
-
         if step % checkpoint_interval == 0 or result.done:
-            checkpoints.append(Checkpoint(step, epsilon, scores, interval_td / max(1, interval_count),
+            checkpoints.append(Checkpoint(step, epsilon, scores,
+                                          interval_td / max(1, interval_count),
                                           interval_reward / max(1, interval_count)))
-            interval_td = 0.0
-            interval_reward = 0.0
+            interval_td = interval_reward = 0.0
             interval_count = 0
         if result.done:
             break
