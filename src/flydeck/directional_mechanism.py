@@ -15,34 +15,15 @@ class DirectionalResponse:
 
 
 class SpatialOffsetDirectionalMechanism:
-    """T4/T5-like directional subunit from offset excitation and inhibition.
+    """T4/T5-like directional subunit from offset excitation and inhibition."""
 
-    The mechanism is intentionally small: excitation samples the leading-side
-    receptive-field component with a fast response, while inhibition samples
-    the anatomically offset inhibitory component with slower temporal decay.
-    Direction is therefore produced by the order in which the two spatially
-    separated components are stimulated, not by a hard-coded preferred
-    direction.
-
-    This is a functional abstraction of the measured T4 mechanism, not a
-    biophysical simulation. The receptive-field centers come from the
-    connectome-derived anatomical influence estimate.
-    """
-
-    def __init__(
-        self,
-        fields: dict[int, ReceptiveField],
-        *,
-        inhibition_alpha: float = 0.20,
-    ) -> None:
+    def __init__(self, fields: dict[int, ReceptiveField], *, inhibition_alpha: float = 0.20) -> None:
         if not 0.0 < inhibition_alpha <= 1.0:
             raise ValueError("inhibition_alpha must be between 0 and 1")
         self.fields = fields
         self.inhibition_alpha = inhibition_alpha
         self._inhibition_state = {
-            index: 0.0
-            for index, field in fields.items()
-            if field.has_inhibitory_component
+            index: 0.0 for index, field in fields.items() if field.has_inhibitory_component
         }
         self._previous_stimulus: RetinaStimulus | None = None
 
@@ -58,25 +39,21 @@ class SpatialOffsetDirectionalMechanism:
         *,
         polarity: str,
     ) -> tuple[float, ...]:
-        """Return one directional response per output group.
-
-        T4 uses the ON field and T5 uses the OFF field. The current stimulus
-        is sampled at the propagated excitatory/inhibitory RF centers. A fast
-        excitation is paired with a delayed inhibitory trace, so reversing a
-        moving stimulus reverses the temporal order of the two terms.
-        """
         if polarity not in {"on", "off"}:
             raise ValueError("polarity must be 'on' or 'off'")
         field = stimulus.on_field if polarity == "on" else stimulus.off_field
-        previous_field = (
-            None
-            if self._previous_stimulus is None
-            else self._previous_stimulus.on_field
-            if polarity == "on"
-            else self._previous_stimulus.off_field
-        )
+        previous_field = None
+        if self._previous_stimulus is not None:
+            previous_field = (
+                self._previous_stimulus.on_field
+                if polarity == "on"
+                else self._previous_stimulus.off_field
+            )
 
-        values = [0.0] * len(self.fields)
+        # Fields are keyed by the circuit's global neuron index. Do not use
+        # len(fields) as the vector size: a sparse set can contain indices such
+        # as 100, 5000, 30000.
+        values: dict[int, float] = {}
         for index, rf in self.fields.items():
             if rf.excitatory_x is None or rf.excitatory_y is None:
                 continue
@@ -85,9 +62,8 @@ class SpatialOffsetDirectionalMechanism:
             fast_excitation = max(0.0, excitation)
             excitation_onset = max(0.0, excitation - previous_excitation)
 
-            if rf.inhibitory_x is None or rf.inhibitory_y is None:
-                inhibition = 0.0
-            else:
+            inhibition = 0.0
+            if rf.inhibitory_x is not None and rf.inhibitory_y is not None:
                 inhibition_input = _sample(field, rf.inhibitory_x, rf.inhibitory_y)
                 previous_inhibition = self._inhibition_state.get(index, 0.0)
                 inhibition = previous_inhibition + self.inhibition_alpha * (
@@ -95,19 +71,13 @@ class SpatialOffsetDirectionalMechanism:
                 )
                 self._inhibition_state[index] = inhibition
 
-            # Keep the fast excitatory component and the onset transient. The
-            # onset term makes the causal ordering of E and I visible without
-            # using the retina's direction metadata.
             values[index] = max(0.0, fast_excitation + excitation_onset - inhibition)
 
         self._previous_stimulus = stimulus
-
-        group_values: list[float] = []
-        for group in outputs:
-            group_values.append(
-                sum(values[index] for index in group) / max(1, len(group))
-            )
-        return tuple(group_values)
+        return tuple(
+            sum(values.get(index, 0.0) for index in group) / max(1, len(group))
+            for group in outputs
+        )
 
     def response_for_neuron(
         self,
@@ -116,7 +86,6 @@ class SpatialOffsetDirectionalMechanism:
         *,
         polarity: str,
     ) -> DirectionalResponse:
-        """Expose the E/I terms for controlled directional diagnostics."""
         if neuron_index not in self.fields:
             raise KeyError(f"no receptive field for neuron {neuron_index}")
         rf = self.fields[neuron_index]
@@ -127,11 +96,7 @@ class SpatialOffsetDirectionalMechanism:
             excitation = _sample(field, rf.excitatory_x, rf.excitatory_y)
         if rf.inhibitory_x is not None and rf.inhibitory_y is not None:
             inhibition = _sample(field, rf.inhibitory_x, rf.inhibitory_y)
-        return DirectionalResponse(
-            excitation=excitation,
-            inhibition=inhibition,
-            response=max(0.0, excitation - inhibition),
-        )
+        return DirectionalResponse(excitation, inhibition, max(0.0, excitation - inhibition))
 
 
 def _sample(
