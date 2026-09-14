@@ -309,11 +309,23 @@ def _extract_soma_xyz(
             except (TypeError, ValueError):
                 return None
         return tuple(coordinate_values)  # type: ignore[return-value]
-    if isinstance(value, (list, tuple)) and len(value) >= 3:
+    if isinstance(value, (list, tuple)):
+        if len(value) < 3:
+            return None
         try:
             return float(value[0]), float(value[1]), float(value[2])
         except (TypeError, ValueError):
             return None
+    if hasattr(value, "tolist"):
+        try:
+            sequence = value.tolist()
+        except (TypeError, ValueError):
+            return None
+        if isinstance(sequence, (list, tuple)) and len(sequence) >= 3:
+            try:
+                return float(sequence[0]), float(sequence[1]), float(sequence[2])
+            except (TypeError, ValueError):
+                return None
     if isinstance(value, str):
         numbers = re.findall(r"[-+]?\d+(?:\.\d+)?", value)
         if len(numbers) >= 3:
