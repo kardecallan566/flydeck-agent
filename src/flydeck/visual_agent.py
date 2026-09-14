@@ -32,29 +32,41 @@ class MaleCNSVisualSystem:
         self.outgoing: list[list[tuple[int, float]]] = [[] for _ in circuit.neurons]
         for edge in circuit.edges:
             sign = circuit.neurons[edge.source].sign
-            # Missing transmitter information remains neutral. We do not guess
-            # an excitatory sign just to make the circuit more active.
             self.outgoing[edge.source].append((edge.target, edge.weight * sign * synapse_scale))
         self.last_stimulus: RetinaStimulus | None = None
+        self.last_entry_drive = [0.0] * len(circuit.neurons)
 
     def reset(self) -> None:
         self.state = [0.0] * len(self.state)
         self.last_stimulus = None
+        self.last_entry_drive = [0.0] * len(self.state)
 
     def step(self, stimulus: RetinaStimulus) -> tuple[float, ...]:
         self.last_stimulus = stimulus
         drive = [0.0] * len(self.state)
-        on_strength = max((max(row) for row in stimulus.on_field), default=0.0)
-        off_strength = max((max(row) for row in stimulus.off_field), default=0.0)
 
-        # L1 and L2 are the biological entry points of the ON/OFF motion
-        # streams. The retina supplies contrast; the MaleCNS graph supplies the
-        # subsequent transformation.
-        for neuron in self.circuit.l1_inputs:
-            drive[neuron] += on_strength
-        for neuron in self.circuit.l2_inputs:
-            drive[neuron] += off_strength
+        # The artificial retina is 2-D: x is the time axis and y is price.
+        # Real MaleCNS L1/L2 cells retain their normalized soma position. Each
+        # entry neuron therefore samples the corresponding local visual patch
+        # instead of receiving one global ON/OFF maximum.
+        if self.circuit.has_spatial_mapping:
+            for neuron in self.circuit.l1_inputs:
+                n = self.circuit.neurons[neuron]
+                drive[neuron] = _sample_field(stimulus.on_field, n.spatial_x, n.spatial_y)
+            for neuron in self.circuit.l2_inputs:
+                n = self.circuit.neurons[neuron]
+                drive[neuron] = _sample_field(stimulus.off_field, n.spatial_x, n.spatial_y)
+        else:
+            # Legacy/synthetic circuits can still run, but this path is not
+            # considered a retinotopic MaleCNS build.
+            on_strength = max((max(row) for row in stimulus.on_field), default=0.0)
+            off_strength = max((max(row) for row in stimulus.off_field), default=0.0)
+            for neuron in self.circuit.l1_inputs:
+                drive[neuron] += on_strength
+            for neuron in self.circuit.l2_inputs:
+                drive[neuron] += off_strength
 
+        self.last_entry_drive = drive
         recurrent = [0.0] * len(self.state)
         for source, outgoing in enumerate(self.outgoing):
             activity = self.state[source]
@@ -88,6 +100,25 @@ class MaleCNSVisualSystem:
             down_score=down,
             confidence=confidence,
             wait=confidence < minimum_confidence or coherence < 0.20,
+        )
+
+    def entry_activity_grid(self, width: int = 32, height: int = 16) -> tuple[tuple[float, ...], ...]:
+        """Render L1/L2 activity back onto the artificial retina grid."""
+        if width < 2 or height < 2:
+            raise ValueError("grid dimensions are too small")
+        grid = [[0.0] * width for _ in range(height)]
+        counts = [[0] * width for _ in range(height)]
+        for neuron_index in self.circuit.l1_inputs + self.circuit.l2_inputs:
+            neuron = self.circuit.neurons[neuron_index]
+            if neuron.spatial_x is None or neuron.spatial_y is None:
+                continue
+            x = min(width - 1, max(0, int(round(neuron.spatial_x * (width - 1)))))
+            y = min(height - 1, max(0, int(round(neuron.spatial_y * (height - 1)))))
+            grid[y][x] += self.state[neuron_index]
+            counts[y][x] += 1
+        return tuple(
+            tuple(value / max(1, counts[y][x]) for x, value in enumerate(row))
+            for y, row in enumerate(grid)
         )
 
     def _directional_activity(self, groups: tuple[tuple[int, ...], ...]) -> tuple[float, ...]:
@@ -126,3 +157,25 @@ class FlyVisualPredictionAgent:
     @property
     def edge_count(self) -> int:
         return len(self.visual.circuit.edges)
+
+
+def _sample_field(
+    field: tuple[tuple[float, ...], ...],
+    spatial_x: float | None,
+    spatial_y: float | None,
+) -> float:
+    if spatial_x is None or spatial_y is None or not field or not field[0]:
+        return 0.0
+    height = len(field)
+    width = len(field[0])
+    x = min(width - 1, max(0.0, spatial_x * (width - 1)))
+    y = min(height - 1, max(0.0, spatial_y * (height - 1)))
+    x0, y0 = int(math.floor(x)), int(math.floor(y))
+    x1, y1 = min(width - 1, x0 + 1), min(height - 1, y0 + 1)
+    fx, fy = x - x0, y - y0
+    return (
+        field[y0][x0] * (1.0 - fx) * (1.0 - fy)
+        + field[y0][x1] * fx * (1.0 - fy)
+        + field[y1][x0] * (1.0 - fx) * fy
+        + field[y1][x1] * fx * fy
+    )
