@@ -44,12 +44,10 @@ class VisualCircuit:
 
     @property
     def on_inputs(self) -> tuple[tuple[int, ...], ...]:
-        """Compatibility view: L1 is the ON entry channel."""
         return (self.l1_inputs, (), (), ())
 
     @property
     def off_inputs(self) -> tuple[tuple[int, ...], ...]:
-        """Compatibility view: L2 is the OFF entry channel."""
         return (self.l2_inputs, (), (), ())
 
     @property
@@ -67,15 +65,7 @@ class VisualCircuit:
             "architecture": "retinotopic L1/L2 -> medulla motion pathway -> T4/T5",
             "spatial_mode": self.spatial_mode,
             "neurons": [
-                {
-                    "body_id": n.body_id,
-                    "cell_type": n.cell_type,
-                    "role": n.role,
-                    "neurotransmitter": n.neurotransmitter,
-                    "sign": n.sign,
-                    "spatial_x": n.spatial_x,
-                    "spatial_y": n.spatial_y,
-                }
+                {"body_id": n.body_id, "cell_type": n.cell_type, "role": n.role, "neurotransmitter": n.neurotransmitter, "sign": n.sign, "spatial_x": n.spatial_x, "spatial_y": n.spatial_y}
                 for n in self.neurons
             ],
             "edges": [[e.source, e.target, e.weight] for e in self.edges],
@@ -90,15 +80,7 @@ class VisualCircuit:
     def load(cls, path: str | Path) -> "VisualCircuit":
         payload = json.loads(Path(path).read_text(encoding="utf-8"))
         neurons = tuple(
-            VisualNeuron(
-                int(item["body_id"]),
-                str(item["cell_type"]),
-                str(item["role"]),
-                item.get("neurotransmitter"),
-                float(item.get("sign", 0.0)),
-                _optional_float(item.get("spatial_x")),
-                _optional_float(item.get("spatial_y")),
-            )
+            VisualNeuron(int(item["body_id"]), str(item["cell_type"]), str(item["role"]), item.get("neurotransmitter"), float(item.get("sign", 0.0)), _optional_float(item.get("spatial_x")), _optional_float(item.get("spatial_y")))
             for item in payload["neurons"]
         )
         if "l1_inputs" in payload:
@@ -119,20 +101,9 @@ class VisualCircuit:
 
 
 class VisualCircuitBuilder:
-    """Extract a named MaleCNS motion pathway with an explicit spatial proxy.
+    """Extract a named MaleCNS motion pathway with an explicit spatial proxy."""
 
-    Neuron identities and directed edges come directly from MaleCNS v1.0.
-    For L1/L2, the current retinotopic interface uses curated soma coordinates
-    as a geometric proxy. This is intentionally labeled as a proxy: soma
-    coordinates are not the published eye/medulla column map.
-    """
-
-    def __init__(
-        self,
-        annotations_path: str | Path,
-        weights_path: str | Path,
-        neurotransmitters_path: str | Path | None = None,
-    ) -> None:
+    def __init__(self, annotations_path: str | Path, weights_path: str | Path, neurotransmitters_path: str | Path | None = None) -> None:
         self.annotations_path = Path(annotations_path)
         self.weights_path = Path(weights_path)
         self.neurotransmitters_path = Path(neurotransmitters_path) if neurotransmitters_path else None
@@ -151,9 +122,8 @@ class VisualCircuitBuilder:
         spatial_cols = _find_spatial_columns(cols)
         selected_rows: list[tuple[int, str, float, float, float]] = []
         skipped_spatial = {"L1": 0, "L2": 0}
-        data = annotations.to_pylist()
         wanted = {name.lower() for name in MOTION_TYPES}
-        for row in data:
+        for row in annotations.to_pylist():
             if status_col and str(row.get(status_col, "")).lower() != "traced":
                 continue
             body = row.get(body_col)
@@ -164,22 +134,16 @@ class VisualCircuitBuilder:
             coords = _extract_soma_xyz(row, spatial_cols)
             if coords is None:
                 if low_type in {"l1", "l2"}:
-                    skipped_spatial[cell_type] = skipped_spatial.get(cell_type, 0) + 1
+                    skipped_spatial[low_type.upper()] += 1
                     continue
-                # Non-entry neurons do not need spatial coordinates.
                 selected_rows.append((int(body), cell_type, 0.0, 0.0, 0.0))
                 continue
             selected_rows.append((int(body), cell_type, *coords))
 
         if not selected_rows:
             raise ValueError("No named MaleCNS visual motion types were found")
-
         ids = {body for body, *_ in selected_rows}
-        raw_spatial = {
-            body: (x, y, z)
-            for body, cell_type, x, y, z in selected_rows
-            if cell_type.lower() in {"l1", "l2"}
-        }
+        raw_spatial = {body: (x, y, z) for body, cell_type, x, y, z in selected_rows if cell_type.lower() in {"l1", "l2"}}
         selected = {body: cell_type for body, cell_type, *_ in selected_rows}
         if not any(name.lower() == "l1" for name in selected.values()):
             raise ValueError("MaleCNS circuit has no L1 neurons with parseable soma coordinates")
@@ -191,16 +155,11 @@ class VisualCircuitBuilder:
         with ipc.open_file(self.weights_path) as reader:
             for batch_index in range(reader.num_record_batches):
                 batch = reader.get_batch(batch_index)
-                mask = pc.and_(
-                    pc.is_in(batch["body_pre"], value_set=value_set),
-                    pc.is_in(batch["body_post"], value_set=value_set),
-                )
+                mask = pc.and_(pc.is_in(batch["body_pre"], value_set=value_set), pc.is_in(batch["body_post"], value_set=value_set))
                 filtered = batch.filter(mask)
                 edges_by_body.extend(
                     (int(source), int(target), float(weight))
-                    for source, target, weight in zip(
-                        filtered["body_pre"], filtered["body_post"], filtered["weight"]
-                    )
+                    for source, target, weight in zip(filtered["body_pre"], filtered["body_post"], filtered["weight"])
                     if int(source) != int(target)
                 )
 
@@ -208,10 +167,7 @@ class VisualCircuitBuilder:
         nt = self._neurotransmitters()
         ordered = sorted(ids)
         index = {body: i for i, body in enumerate(ordered)}
-        neurons = tuple(
-            self._make_neuron(body, selected[body], nt, spatial_2d.get(body))
-            for body in ordered
-        )
+        neurons = tuple(self._make_neuron(body, selected[body], nt, spatial_2d.get(body)) for body in ordered)
         edges = tuple(VisualEdge(index[source], index[target], weight) for source, target, weight in edges_by_body)
 
         def group(name: str) -> tuple[int, ...]:
@@ -233,10 +189,7 @@ class VisualCircuitBuilder:
         if not circuit.has_spatial_mapping:
             raise ValueError("L1/L2 spatial mapping was not created")
         circuit.save(output_path)
-        print(
-            "Spatial mapping: soma_xy_proxy; "
-            f"skipped L1={skipped_spatial['L1']}, L2={skipped_spatial['L2']} entries without soma coordinates"
-        )
+        print(f"Spatial mapping: soma_xy_proxy; skipped L1={skipped_spatial['L1']}, L2={skipped_spatial['L2']} entries without soma coordinates")
         return circuit
 
     def _neurotransmitters(self) -> dict[int, str]:
@@ -245,22 +198,13 @@ class VisualCircuitBuilder:
         import pyarrow.feather as feather
         table = feather.read_table(self.neurotransmitters_path)
         cols = set(table.column_names)
-        body_col = _first(cols, "bodyId", "bodyid", "body_id", "id")
+        body_col = _first(cols, "bodyId", "bodyid", "body_id", "id", "body")
         nt_col = _first(cols, "predicted_nt", "neurotransmitter", "consensus_nt", "nt")
         data = table.select([body_col, nt_col]).to_pydict()
-        return {
-            int(body): str(value).strip()
-            for body, value in zip(data[body_col], data[nt_col])
-            if value is not None
-        }
+        return {int(body): str(value).strip() for body, value in zip(data[body_col], data[nt_col]) if value is not None}
 
     @staticmethod
-    def _make_neuron(
-        body: int,
-        cell_type: str,
-        nt: dict[int, str],
-        spatial: tuple[float, float] | None,
-    ) -> VisualNeuron:
+    def _make_neuron(body: int, cell_type: str, nt: dict[int, str], spatial: tuple[float, float] | None) -> VisualNeuron:
         low = cell_type.lower()
         if low in {name.lower() for name in T4_TYPES + T5_TYPES}:
             role = "motion_detector"
@@ -269,14 +213,7 @@ class VisualCircuitBuilder:
         else:
             role = "motion_interneuron"
         transmitter = nt.get(body)
-        return VisualNeuron(
-            body,
-            cell_type,
-            role,
-            transmitter,
-            NT_SIGN.get((transmitter or "").lower(), 0.0),
-            *(spatial or (None, None)),
-        )
+        return VisualNeuron(body, cell_type, role, transmitter, NT_SIGN.get((transmitter or "").lower(), 0.0), *(spatial or (None, None)))
 
 
 def _first(columns: set[str], *names: str) -> str:
@@ -287,21 +224,13 @@ def _first(columns: set[str], *names: str) -> str:
 
 
 def _find_spatial_columns(columns: set[str]) -> tuple[str | None, str | None, str | None, str | None]:
-    direct = (
-        _first_optional(columns, "soma_x", "somaX", "soma_x_nm"),
-        _first_optional(columns, "soma_y", "somaY", "soma_y_nm"),
-        _first_optional(columns, "soma_z", "somaZ", "soma_z_nm"),
-        _first_optional(columns, "somaLocation", "soma_location", "soma_position"),
-    )
+    direct = (_first_optional(columns, "soma_x", "somaX", "soma_x_nm"), _first_optional(columns, "soma_y", "somaY", "soma_y_nm"), _first_optional(columns, "soma_z", "somaZ", "soma_z_nm"), _first_optional(columns, "somaLocation", "soma_location", "soma_position"))
     if direct[0] and direct[1] and direct[2]:
         return direct
     return (None, None, None, direct[3])
 
 
-def _extract_soma_xyz(
-    row: dict,
-    spatial_cols: tuple[str | None, str | None, str | None, str | None],
-) -> tuple[float, float, float] | None:
+def _extract_soma_xyz(row: dict, spatial_cols: tuple[str | None, str | None, str | None, str | None]) -> tuple[float, float, float] | None:
     x_col, y_col, z_col, location_col = spatial_cols
     if x_col and y_col and z_col:
         try:
@@ -356,10 +285,7 @@ def _normalize_spatial(coords: dict[int, tuple[float, float, float]]) -> dict[in
     ymin, ymax = min(ys), max(ys)
     xspan = max(xmax - xmin, 1e-12)
     yspan = max(ymax - ymin, 1e-12)
-    return {
-        body: ((x - xmin) / xspan, (y - ymin) / yspan)
-        for body, (x, y, _z) in coords.items()
-    }
+    return {body: ((x - xmin) / xspan, (y - ymin) / yspan) for body, (x, y, _z) in coords.items()}
 
 
 def _first_optional(columns: set[str], *names: str) -> str | None:
