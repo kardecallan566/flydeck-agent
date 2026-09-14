@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 
 from .visual_circuit import VisualCircuit
-from .visual_diagnostics import format_diagnostic, run_motion_suite
+from .visual_diagnostics import format_diagnostic, format_temporal_summary, run_motion_suite
 
 
 def main() -> int:
@@ -21,11 +21,18 @@ def main() -> int:
     print(f"neurons: {len(circuit.neurons)}")
     print(f"edges: {len(circuit.edges)}")
     print(f"spatial mode: {circuit.spatial_mode}")
+    print(f"temporal frames: {args.steps}")
     print()
-    for diagnostic in run_motion_suite(circuit, steps=args.steps):
+
+    results = run_motion_suite(circuit, steps=args.steps)
+    for diagnostic in results:
         print(format_diagnostic(diagnostic))
+        print(format_temporal_summary(diagnostic))
+
     print()
+    print("Directional order: [right, left, up, down]")
     print("T4/T5 order: a=front-to-back, b=back-to-front, c=up, d=down")
+    print("Direction is encoded only by edge displacement across frames; metadata channels are neutral.")
     print("These are circuit responses only; no BNB labels are used by this diagnostic.")
     return 0
 
