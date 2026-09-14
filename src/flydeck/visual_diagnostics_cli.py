@@ -24,6 +24,7 @@ def main() -> int:
     print(f"edges: {len(circuit.edges)}")
     print(f"spatial mode: {circuit.spatial_mode}")
     print(f"temporal frames: {args.steps}")
+    print("directional mechanism: fast excitation + slow spatially offset inhibition")
     print()
 
     fields = infer_receptive_fields(circuit, iterations=args.rf_iterations)
