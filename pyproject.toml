@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "flydeck-agent"
 version = "0.1.0"
-description = "Lightweight agent runtime for efficient computation"
+description = "Lightweight MaleCNS-based BNB 5-minute prediction agent"
 requires-python = ">=3.11"
 dependencies = []
 
@@ -14,6 +14,7 @@ connectome = ["pyarrow>=18.0"]
 
 [project.scripts]
 flydeck = "flydeck.cli:main"
+flydeck-bnb = "flydeck.bnb_prediction_cli:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
