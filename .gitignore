@@ -2,9 +2,11 @@
 __pycache__/
 *.py[codz]
 *$py.class
+
+# C extensions
 *.so
 
-# Packaging
+# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -24,17 +26,95 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# Test/cache
-.pytest_cache/
-.coverage
-.coverage.*
-.cache
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Test / coverage
 htmlcov/
 .tox/
 .nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py.cover
 .hypothesis/
-.mypy_cache/
-.ruff_cache/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+instance/
+.webassets-cache
+
+# Scrapy
+.scrapy
+
+# Sphinx
+ docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Pipenv
+Pipfile.lock
+
+# UV
+uv.lock
+
+# poetry
+poetry.lock
+poetry.toml
+
+# pdm
+.pdm-python
+.pdm-build/
+
+# pixi
+.pixi
+pixi.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Redis
+*.rdb
+*.aof
+*.pid
+
+# RabbitMQ
+mnesia/
+rabbitmq/
+
+# ActiveMQ
+activemq-data/
+
+# SageMath
+*.sage.py
 
 # Environments
 .env
@@ -46,13 +126,55 @@ ENV/
 env.bak/
 venv.bak/
 
-# IDE / OS
-.vscode/
-.idea/
-*.log
-.DS_Store
+# Spyder
+.spyderproject
+.spyproject
 
-# Project data
- data/real/
- data/malecns/raw/
- data/malecns/*.json
+# Rope
+.ropeproject
+
+# site
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre
+.pyre/
+
+# pytype
+.pytype/
+
+# Cython
+cython_debug/
+
+# PyCharm
+.idea/
+
+# Abstra
+.abstra/
+
+# Visual Studio Code
+.vscode/
+tempCodeRunnerFile.py
+
+# Ruff
+.ruff_cache/
+
+# PyPI
+.pypirc
+
+# Marimo
+marimo/_static/
+marimo/_lsp/
+__marimo__/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# FlyDeck market/connectome data
+data/real/
+data/malecns/raw/
+data/malecns/*.json
