@@ -15,6 +15,7 @@ connectome = ["pyarrow>=18.0"]
 [project.scripts]
 flydeck = "flydeck.cli:main"
 flydeck-bnb = "flydeck.bnb_prediction_cli:main"
+flydeck-visual-build = "flydeck.visual_cli:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
