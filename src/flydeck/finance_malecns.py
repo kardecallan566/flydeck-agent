@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 
-from .finance import Candle, CryptoTradingEnvironment, SyntheticCryptoMarket
+from .finance import CryptoTradingEnvironment, SyntheticCryptoMarket
 from .malecns import MaleCNSCircuit, MaleCNSReservoir
 
 
@@ -45,6 +46,7 @@ def train_malecns_synthetic(
         raise ValueError("episodes must be >= 1")
 
     reservoir = MaleCNSReservoir(circuit, feature_count=12, action_count=3, seed=seed)
+    rng = random.Random(seed)
     returns: list[float] = []
     drawdowns: list[float] = []
     counts = [0, 0, 0]
@@ -66,20 +68,21 @@ def train_malecns_synthetic(
         total_reward = 0.0
 
         for _ in range(max_steps):
-            action = _choose_action(scores, reservoir, current_epsilon)
+            action = _choose_action(scores, current_epsilon, rng)
             counts[action] += 1
+            current_activity = reservoir.action_activity(action)
 
             result = environment.step(action)
             total_reward += result.reward
             if result.done:
-                reservoir.update_readout(action, result.reward, learning_rate)
+                td_error = max(-1.0, min(1.0, result.reward - scores[action]))
+                reservoir.update_readout(action, td_error, learning_rate, current_activity)
                 break
 
             next_scores = reservoir.step(result.observation)
-            current = scores[action]
             target = result.reward + discount * max(next_scores)
-            td_error = max(-1.0, min(1.0, target - current))
-            reservoir.update_readout(action, td_error, learning_rate)
+            td_error = max(-1.0, min(1.0, target - scores[action]))
+            reservoir.update_readout(action, td_error, learning_rate, current_activity)
             scores = next_scores
 
         metrics = environment.episode_result(total_reward)
@@ -101,11 +104,7 @@ def train_malecns_synthetic(
     )
 
 
-def _choose_action(scores: tuple[float, ...], reservoir: MaleCNSReservoir, epsilon: float) -> int:
-    # Reservoir owns the readout but not the exploration policy; use its scores
-    # directly so the experiment remains comparable to the existing finance agent.
-    if reservoir.action_count != len(scores):
-        raise ValueError("score/action count mismatch")
-    # Deterministic exploration is handled by the caller's global seed through
-    # the reservoir instance; this helper intentionally uses greedy selection.
+def _choose_action(scores: tuple[float, ...], epsilon: float, rng: random.Random) -> int:
+    if rng.random() < epsilon:
+        return rng.randrange(len(scores))
     return max(range(len(scores)), key=scores.__getitem__)
