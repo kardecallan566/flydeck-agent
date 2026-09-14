@@ -32,10 +32,7 @@ class MaleCNSVisualSystem:
         self.outgoing: list[list[tuple[int, float]]] = [[] for _ in circuit.neurons]
         for edge in circuit.edges:
             source_sign = circuit.neurons[edge.source].sign
-            # Predicted monoamine/modulatory or missing transmitter information
-            # is not invented as excitatory. Such edges are neutral in V1.
-            signed_weight = edge.weight * source_sign
-            self.outgoing[edge.source].append((edge.target, signed_weight * synapse_scale))
+            self.outgoing[edge.source].append((edge.target, edge.weight * source_sign * synapse_scale))
         self.last_stimulus: RetinaStimulus | None = None
 
     def reset(self) -> None:
@@ -47,9 +44,11 @@ class MaleCNSVisualSystem:
         drive = [0.0] * len(self.state)
         for channel, value in enumerate(stimulus.directions):
             for neuron in self.circuit.on_inputs[channel]:
-                drive[neuron] += value
+                if self.circuit.neurons[neuron].cell_type.lower() == "l1":
+                    drive[neuron] += value
             for neuron in self.circuit.off_inputs[channel]:
-                drive[neuron] -= value
+                if self.circuit.neurons[neuron].cell_type.lower() == "l2":
+                    drive[neuron] += value
 
         recurrent = [0.0] * len(self.state)
         for source, outgoing in enumerate(self.outgoing):
@@ -69,8 +68,8 @@ class MaleCNSVisualSystem:
     def decision(self) -> VisualDecision:
         t4 = self._directional_activity(self.circuit.t4_outputs)
         t5 = self._directional_activity(self.circuit.t5_outputs)
-        # T4/T5 a,b,c,d are front-to-back, back-to-front, upward and downward.
-        # For the artificial market retina, only c/d map to vertical price motion.
+        # T4/T5 a,b,c,d encode front-to-back, back-to-front, upward, downward.
+        # Only c/d are mapped to the vertical price axis of the artificial retina.
         up = max(0.0, t4[2]) + max(0.0, t5[2])
         down = max(0.0, t4[3]) + max(0.0, t5[3])
         total = up + down
@@ -78,10 +77,7 @@ class MaleCNSVisualSystem:
         return VisualDecision(up, down, confidence, confidence < 0.20)
 
     def _directional_activity(self, groups: tuple[tuple[int, ...], ...]) -> tuple[float, ...]:
-        return tuple(
-            sum(self.state[index] for index in group) / max(1, len(group))
-            for group in groups
-        )
+        return tuple(sum(self.state[index] for index in group) / max(1, len(group)) for group in groups)
 
 
 class FlyVisualPredictionAgent:
