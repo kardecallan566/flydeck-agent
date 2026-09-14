@@ -9,6 +9,9 @@ description = "Lightweight agent runtime for efficient computation"
 requires-python = ">=3.11"
 dependencies = []
 
+[project.optional-dependencies]
+connectome = ["pyarrow>=18.0"]
+
 [project.scripts]
 flydeck = "flydeck.cli:main"
 
