@@ -34,6 +34,8 @@ class BNBPredictionDataset:
         )
 
     def outcome(self, index: int) -> Prediction:
+        if not 0 <= index < self.size - 1:
+            raise IndexError("outcome requires an index with a following candle")
         if self.closes[index + 1] > self.closes[index]:
             return Prediction.UP
         if self.closes[index + 1] < self.closes[index]:
@@ -46,6 +48,7 @@ def load_bnb_5m_csv(path: str | Path) -> BNBPredictionDataset:
         rows = list(csv.DictReader(handle))
     if not rows:
         raise ValueError("BNB CSV is empty")
+
     names = {name.strip().lower(): name for name in rows[0]}
     required = {"open", "high", "low", "close", "volume"}
     missing = required - names.keys()
@@ -54,11 +57,23 @@ def load_bnb_5m_csv(path: str | Path) -> BNBPredictionDataset:
         missing.add("timestamp")
     if missing:
         raise ValueError(f"missing CSV columns: {sorted(missing)}")
-    columns = {key: [] for key in ("timestamps", "opens", "highs", "lows", "closes", "volumes")}
+
+    # CSV headers are singular (open/high/low/close/volume), while the
+    # in-memory dataset uses plural attribute names (opens/highs/...).
+    column_names = {
+        "timestamps": timestamp_name,
+        "opens": names["open"],
+        "highs": names["high"],
+        "lows": names["low"],
+        "closes": names["close"],
+        "volumes": names["volume"],
+    }
+    columns = {key: [] for key in column_names}
     for row in rows:
-        columns["timestamps"].append(int(float(row[timestamp_name])))
+        columns["timestamps"].append(int(float(row[column_names["timestamps"]])))
         for key in ("opens", "highs", "lows", "closes", "volumes"):
-            columns[key].append(float(row[names[key]]))
+            columns[key].append(float(row[column_names[key]]))
+
     timestamps = columns["timestamps"]
     if any(timestamps[i] >= timestamps[i + 1] for i in range(len(timestamps) - 1)):
         raise ValueError("BNB data must be strictly chronological")
@@ -69,9 +84,10 @@ def download_bnb_5m_csv(path: str | Path, limit: int = 1000) -> Path:
     if not 2 <= limit <= 1000:
         raise ValueError("limit must be between 2 and 1000")
     from urllib.parse import urlencode
+    import json
+
     query = urlencode({"symbol": "BNBUSDT", "interval": "5m", "limit": limit})
     with urlopen(f"{BINANCE_KLINES_URL}?{query}", timeout=30) as response:
-        import json
         rows = json.load(response)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
