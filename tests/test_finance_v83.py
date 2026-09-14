@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from copy import deepcopy
+
 from flydeck.agent import Agent
 from flydeck.finance import CryptoTradingEnvironment, SyntheticCryptoMarket
 from flydeck.finance_encoder import SparseMarketEncoder
-from flydeck.finance_v83 import train_synthetic_crypto_v83
+from flydeck.finance_v83 import _counterfactual_targets, train_synthetic_crypto_v83
 
 
 def _agent(seed: int = 42) -> Agent:
@@ -75,6 +77,78 @@ def test_all_action_td_is_deterministic():
         return errors, weights
 
     assert run(11) == run(11)
+
+
+def test_counterfactual_optimization_matches_deepcopy_reference():
+    agent = _agent()
+    encoder = SparseMarketEncoder(feature_count=12, winners=4)
+    environment = CryptoTradingEnvironment(
+        SyntheticCryptoMarket(length=64, seed=19).generate(),
+        max_steps=20,
+    )
+    agent.network.reset()
+    encoder.reset()
+    agent.observe(encoder.encode(environment.reset()))
+    agent.network.step(encoder.encode(environment._observation()))
+
+    original_environment_state = (
+        environment.index,
+        environment.steps,
+        environment.cash,
+        environment.asset_units,
+        environment.peak_value,
+        environment.max_drawdown,
+        environment.trades,
+        environment.invalid_actions,
+        environment._portfolio_value,
+    )
+    original_encoder_action = encoder._previous_action
+    original_network_state = (
+        tuple(agent.network._state),
+        tuple(agent.network._decision_state),
+        tuple(agent.network._previous_decision_state),
+        tuple(agent.network._eligibility),
+    )
+
+    optimized = _counterfactual_targets(agent, encoder, environment, discount=0.97)
+
+    reference_rewards = []
+    reference_scores = []
+    reference_dones = []
+    for action in range(environment.action_size):
+        trial = deepcopy(environment)
+        trial_encoder = deepcopy(encoder)
+        trial_network = deepcopy(agent.network)
+        result = trial.step(action)
+        reference_rewards.append(result.reward)
+        reference_dones.append(result.done)
+        if result.done:
+            reference_scores.append((0.0,) * agent.network.output_size)
+        else:
+            trial_encoder.observe_action(action)
+            reference_scores.append(trial_network.step(trial_encoder.encode(result.observation)))
+
+    reference = (tuple(reference_rewards), tuple(reference_scores), tuple(reference_dones))
+    assert optimized == reference
+
+    assert (
+        environment.index,
+        environment.steps,
+        environment.cash,
+        environment.asset_units,
+        environment.peak_value,
+        environment.max_drawdown,
+        environment.trades,
+        environment.invalid_actions,
+        environment._portfolio_value,
+    ) == original_environment_state
+    assert encoder._previous_action == original_encoder_action
+    assert (
+        tuple(agent.network._state),
+        tuple(agent.network._decision_state),
+        tuple(agent.network._previous_decision_state),
+        tuple(agent.network._eligibility),
+    ) == original_network_state
 
 
 def test_synthetic_v83_training_runs():
