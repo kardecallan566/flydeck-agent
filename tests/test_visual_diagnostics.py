@@ -1,5 +1,11 @@
+from flydeck.visual_agent import MaleCNSVisualSystem
 from flydeck.visual_circuit import VisualCircuit, VisualEdge, VisualNeuron
-from flydeck.visual_diagnostics import make_motion_stimulus, run_motion_diagnostic, run_motion_suite
+from flydeck.visual_diagnostics import (
+    make_motion_sequence,
+    make_motion_stimulus,
+    run_motion_diagnostic,
+    run_motion_suite,
+)
 
 
 def _circuit() -> VisualCircuit:
@@ -15,7 +21,12 @@ def _circuit() -> VisualCircuit:
     )
     return VisualCircuit(
         neurons=neurons,
-        edges=(VisualEdge(0, 4, 1.0), VisualEdge(2, 5, 1.0), VisualEdge(1, 6, 1.0), VisualEdge(3, 7, 1.0)),
+        edges=(
+            VisualEdge(0, 4, 1.0),
+            VisualEdge(2, 5, 1.0),
+            VisualEdge(1, 6, 1.0),
+            VisualEdge(3, 7, 1.0),
+        ),
         l1_inputs=(0, 1),
         l2_inputs=(2, 3),
         t4_outputs=((), (), (4,), (5,)),
@@ -27,13 +38,24 @@ def _circuit() -> VisualCircuit:
 def test_controlled_stimulus_is_spatial_and_causal() -> None:
     stimulus = make_motion_stimulus("up", width=8, height=6, polarity="on")
     assert stimulus.coherence == 1.0
-    assert stimulus.directions[2] == 1.0
+    assert stimulus.directions == (0.0, 0.0, 0.0, 0.0)
     assert sum(value for row in stimulus.on_field for value in row) > 0.0
     assert sum(value for row in stimulus.off_field for value in row) == 0.0
 
 
+def test_motion_sequence_changes_position_over_time() -> None:
+    up = make_motion_sequence("up", width=8, height=8, steps=5)
+    down = make_motion_sequence("down", width=8, height=8, steps=5)
+    up_rows = [next(y for y, row in enumerate(item.on_field) if any(row)) for item in up]
+    down_rows = [next(y for y, row in enumerate(item.on_field) if any(row)) for item in down]
+    assert up_rows[0] < up_rows[-1]
+    assert down_rows[0] > down_rows[-1]
+    assert len(set(up_rows)) > 1
+    assert len(set(down_rows)) > 1
+
+
 def test_spatial_entry_mapping_produces_local_drive() -> None:
-    visual = __import__("flydeck.visual_agent", fromlist=["MaleCNSVisualSystem"]).MaleCNSVisualSystem(_circuit())
+    visual = MaleCNSVisualSystem(_circuit())
     stimulus = make_motion_stimulus("up", width=8, height=6, polarity="on", position=0.0)
     visual.step(stimulus)
     assert visual.last_entry_drive[0] != visual.last_entry_drive[1]
@@ -51,5 +73,5 @@ def test_motion_diagnostic_returns_all_directional_groups() -> None:
 
 
 def test_motion_suite_contains_on_off_up_down_controls() -> None:
-    results = run_motion_suite(_circuit(), steps=2)
+    results = run_motion_suite(_circuit(), steps=5)
     assert [item.name for item in results] == ["ON_UP", "ON_DOWN", "OFF_UP", "OFF_DOWN"]
