@@ -67,7 +67,7 @@ def test_motion_sequence_changes_position_over_time() -> None:
 
 def test_spatial_entry_mapping_produces_local_drive() -> None:
     visual = MaleCNSVisualSystem(_circuit())
-    stimulus = make_motion_stimulus("up", width=8, height=6, polarity="on", position=0.0)
+    stimulus = make_motion_stimulus("right", width=8, height=6, polarity="on", position=0.0)
     visual.step(stimulus)
     assert visual.last_entry_drive[0] != visual.last_entry_drive[1]
     assert visual.last_entry_drive[2] == 0.0
