@@ -50,15 +50,21 @@ class MaleCNSRealBenchmark:
 
 
 def load_btcusdt_dataset(path: str | Path) -> RealMarketDataset:
-    """Load a Binance-style OHLCV CSV without external data dependencies."""
+    """Load the project's BTCUSDT OHLCV CSV without external dependencies.
+
+    The timestamp column may be named either ``timestamp`` or ``open_time``.
+    """
     path = Path(path)
     with path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
         if reader.fieldnames is None:
             raise ValueError("market CSV has no header")
         names = {name.strip().lower(): name for name in reader.fieldnames}
-        required = {"open_time", "open", "high", "low", "close", "volume"}
+        timestamp_name = names.get("timestamp") or names.get("open_time")
+        required = {"open", "high", "low", "close", "volume"}
         missing = required - names.keys()
+        if timestamp_name is None:
+            missing.add("timestamp")
         if missing:
             raise ValueError(f"market CSV is missing columns: {sorted(missing)}")
         rows = list(reader)
@@ -66,7 +72,7 @@ def load_btcusdt_dataset(path: str | Path) -> RealMarketDataset:
     candles: list[Candle] = []
     timestamps: list[int] = []
     for row in rows:
-        timestamps.append(int(float(row[names["open_time"]])))
+        timestamps.append(int(float(row[timestamp_name])))
         candles.append(Candle(float(row[names["open"]]), float(row[names["high"]]),
                               float(row[names["low"]]), float(row[names["close"]]),
                               float(row[names["volume"]])))
