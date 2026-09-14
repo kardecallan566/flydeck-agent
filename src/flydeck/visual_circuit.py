@@ -8,9 +8,10 @@ from .malecns import NT_SIGN
 
 T4_TYPES = ("T4a", "T4b", "T4c", "T4d")
 T5_TYPES = ("T5a", "T5b", "T5c", "T5d")
-ON_TYPES = ("L1", "Mi1", "Mi4", "Mi9", "Tm3", "TmY15", "CT1", "C3")
-OFF_TYPES = ("L2", "Tm1", "Tm2", "Tm4", "Tm9", "TmY15", "CT1")
-MOTION_TYPES = tuple(dict.fromkeys(T4_TYPES + T5_TYPES + ON_TYPES + OFF_TYPES))
+ON_PATHWAY_TYPES = ("L1", "Mi1", "Mi4", "Mi9", "Tm3", "C3", "TmY15", "CT1")
+OFF_PATHWAY_TYPES = ("L2", "Tm1", "Tm2", "Tm4", "Tm9", "CT1")
+MOTION_TYPES = tuple(dict.fromkeys(ON_PATHWAY_TYPES + OFF_PATHWAY_TYPES + T4_TYPES + T5_TYPES))
+
 
 @dataclass(frozen=True, slots=True)
 class VisualNeuron:
@@ -20,47 +21,102 @@ class VisualNeuron:
     neurotransmitter: str | None
     sign: float
 
+
 @dataclass(frozen=True, slots=True)
 class VisualEdge:
     source: int
     target: int
     weight: float
 
+
 @dataclass(frozen=True, slots=True)
 class VisualCircuit:
     neurons: tuple[VisualNeuron, ...]
     edges: tuple[VisualEdge, ...]
-    on_inputs: tuple[tuple[int, ...], ...]
-    off_inputs: tuple[tuple[int, ...], ...]
+    l1_inputs: tuple[int, ...]
+    l2_inputs: tuple[int, ...]
     t4_outputs: tuple[tuple[int, ...], ...]
     t5_outputs: tuple[tuple[int, ...], ...]
 
+    @property
+    def on_inputs(self) -> tuple[tuple[int, ...], ...]:
+        """Compatibility view: L1 is the ON entry channel."""
+        return (self.l1_inputs, (), (), ())
+
+    @property
+    def off_inputs(self) -> tuple[tuple[int, ...], ...]:
+        """Compatibility view: L2 is the OFF entry channel."""
+        return (self.l2_inputs, (), (), ())
+
     def save(self, path: str | Path) -> None:
         payload = {
-            "schema_version": 1,
+            "schema_version": 2,
             "source": "MaleCNS v1.0",
-            "architecture": "named L1/L2 -> T4/T5 motion pathway",
-            "neurons": [{"body_id": n.body_id, "cell_type": n.cell_type, "role": n.role, "neurotransmitter": n.neurotransmitter, "sign": n.sign} for n in self.neurons],
+            "architecture": "L1/L2 -> medulla motion pathway -> T4/T5",
+            "neurons": [
+                {
+                    "body_id": n.body_id,
+                    "cell_type": n.cell_type,
+                    "role": n.role,
+                    "neurotransmitter": n.neurotransmitter,
+                    "sign": n.sign,
+                }
+                for n in self.neurons
+            ],
             "edges": [[e.source, e.target, e.weight] for e in self.edges],
-            "on_inputs": [list(g) for g in self.on_inputs], "off_inputs": [list(g) for g in self.off_inputs],
-            "t4_outputs": [list(g) for g in self.t4_outputs], "t5_outputs": [list(g) for g in self.t5_outputs],
+            "l1_inputs": list(self.l1_inputs),
+            "l2_inputs": list(self.l2_inputs),
+            "t4_outputs": [list(group) for group in self.t4_outputs],
+            "t5_outputs": [list(group) for group in self.t5_outputs],
         }
         Path(path).write_text(json.dumps(payload, separators=(",", ":")) + "\n", encoding="utf-8")
 
     @classmethod
     def load(cls, path: str | Path) -> "VisualCircuit":
-        p = json.loads(Path(path).read_text(encoding="utf-8"))
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        neurons = tuple(
+            VisualNeuron(
+                int(item["body_id"]),
+                str(item["cell_type"]),
+                str(item["role"]),
+                item.get("neurotransmitter"),
+                float(item.get("sign", 0.0)),
+            )
+            for item in payload["neurons"]
+        )
+        if "l1_inputs" in payload:
+            l1 = tuple(int(i) for i in payload["l1_inputs"])
+            l2 = tuple(int(i) for i in payload["l2_inputs"])
+        else:
+            # Read the original experimental schema without treating its four
+            # artificial pools as biological directional channels.
+            l1 = tuple(int(i) for i in payload.get("on_inputs", [[]])[0])
+            l2 = tuple(int(i) for i in payload.get("off_inputs", [[]])[0])
         return cls(
-            tuple(VisualNeuron(int(n["body_id"]), str(n["cell_type"]), str(n["role"]), n.get("neurotransmitter"), float(n.get("sign", 0))) for n in p["neurons"]),
-            tuple(VisualEdge(int(e[0]), int(e[1]), float(e[2])) for e in p["edges"]),
-            tuple(tuple(g) for g in p["on_inputs"]), tuple(tuple(g) for g in p["off_inputs"]),
-            tuple(tuple(g) for g in p["t4_outputs"]), tuple(tuple(g) for g in p["t5_outputs"]),
+            neurons=neurons,
+            edges=tuple(VisualEdge(int(e[0]), int(e[1]), float(e[2])) for e in payload["edges"]),
+            l1_inputs=l1,
+            l2_inputs=l2,
+            t4_outputs=tuple(tuple(int(i) for i in group) for group in payload["t4_outputs"]),
+            t5_outputs=tuple(tuple(int(i) for i in group) for group in payload["t5_outputs"]),
         )
 
-class VisualCircuitBuilder:
-    """Extract named fly motion-vision types and only their real connections."""
 
-    def __init__(self, annotations_path: str | Path, weights_path: str | Path, neurotransmitters_path: str | Path | None = None) -> None:
+class VisualCircuitBuilder:
+    """Extract an anatomically named motion pathway from the published graph.
+
+    We never invent a connection. Every retained edge is a row from the
+    MaleCNS connection-weight table and every retained neuron is selected by
+    its published cell type annotation. The compact circuit contains the named
+    L1/L2 -> T4/T5 motion pathway and its major documented interneurons.
+    """
+
+    def __init__(
+        self,
+        annotations_path: str | Path,
+        weights_path: str | Path,
+        neurotransmitters_path: str | Path | None = None,
+    ) -> None:
         self.annotations_path = Path(annotations_path)
         self.weights_path = Path(weights_path)
         self.neurotransmitters_path = Path(neurotransmitters_path) if neurotransmitters_path else None
@@ -71,45 +127,63 @@ class VisualCircuitBuilder:
         import pyarrow.feather as feather
         import pyarrow.ipc as ipc
 
-        table = feather.read_table(self.annotations_path)
-        cols = set(table.column_names)
-        body_col = _first(cols, "bodyId", "body_id", "id")
+        annotations = feather.read_table(self.annotations_path)
+        cols = set(annotations.column_names)
+        body_col = _first(cols, "bodyId", "bodyid", "body_id", "id")
         type_col = _first(cols, "type", "cell_type", "cellType")
         status_col = "status" if "status" in cols else None
-        wanted = {x.lower() for x in MOTION_TYPES}
+        data = annotations.select([body_col, type_col] + ([status_col] if status_col else [])).to_pydict()
+        wanted = {name.lower() for name in MOTION_TYPES}
         selected: dict[int, str] = {}
-        data = table.select([body_col, type_col] + ([status_col] if status_col else [])).to_pydict()
         for i, body in enumerate(data[body_col]):
             if status_col and str(data[status_col][i]).lower() != "traced":
                 continue
-            cell_type = "" if data[type_col][i] is None else str(data[type_col][i])
+            cell_type = "" if data[type_col][i] is None else str(data[type_col][i]).strip()
             if cell_type.lower() in wanted:
                 selected[int(body)] = cell_type
         if not selected:
-            raise ValueError("No named visual motion neuron types were found")
+            raise ValueError("No named MaleCNS visual motion types were found")
 
         ids = set(selected)
-        value_set = pa.array(list(ids), type=pa.int64())
-        edges: list[tuple[int, int, float]] = []
+        value_set = pa.array(sorted(ids), type=pa.int64())
+        edges_by_body: list[tuple[int, int, float]] = []
         with ipc.open_file(self.weights_path) as reader:
-            for i in range(reader.num_record_batches):
-                batch = reader.get_batch(i)
-                mask = pc.and_(pc.is_in(batch["body_pre"], value_set=value_set), pc.is_in(batch["body_post"], value_set=value_set))
+            for batch_index in range(reader.num_record_batches):
+                batch = reader.get_batch(batch_index)
+                mask = pc.and_(
+                    pc.is_in(batch["body_pre"], value_set=value_set),
+                    pc.is_in(batch["body_post"], value_set=value_set),
+                )
                 filtered = batch.filter(mask)
-                edges.extend((int(a), int(b), float(w)) for a, b, w in zip(filtered["body_pre"], filtered["body_post"], filtered["weight"]) if int(a) != int(b))
+                edges_by_body.extend(
+                    (int(source), int(target), float(weight))
+                    for source, target, weight in zip(
+                        filtered["body_pre"], filtered["body_post"], filtered["weight"]
+                    )
+                    if int(source) != int(target)
+                )
 
         nt = self._neurotransmitters()
         ordered = sorted(ids)
         index = {body: i for i, body in enumerate(ordered)}
         neurons = tuple(self._make_neuron(body, selected[body], nt) for body in ordered)
-        compact_edges = tuple(VisualEdge(index[a], index[b], w) for a, b, w in edges)
+        edges = tuple(VisualEdge(index[source], index[target], weight) for source, target, weight in edges_by_body)
+
+        def group(name: str) -> tuple[int, ...]:
+            return tuple(index[body] for body in ordered if selected[body].lower() == name.lower())
+
         circuit = VisualCircuit(
-            neurons, compact_edges,
-            self._partition(selected, index, ON_TYPES),
-            self._partition(selected, index, OFF_TYPES),
-            tuple(self._group(selected, index, x) for x in T4_TYPES),
-            tuple(self._group(selected, index, x) for x in T5_TYPES),
+            neurons=neurons,
+            edges=edges,
+            l1_inputs=group("L1"),
+            l2_inputs=group("L2"),
+            t4_outputs=tuple(group(name) for name in T4_TYPES),
+            t5_outputs=tuple(group(name) for name in T5_TYPES),
         )
+        if not circuit.l1_inputs or not circuit.l2_inputs:
+            raise ValueError("MaleCNS circuit is missing L1 or L2 visual entry neurons")
+        if any(not group for group in circuit.t4_outputs + circuit.t5_outputs):
+            raise ValueError("MaleCNS circuit is missing one or more T4/T5 directional types")
         circuit.save(output_path)
         return circuit
 
@@ -119,30 +193,27 @@ class VisualCircuitBuilder:
         import pyarrow.feather as feather
         table = feather.read_table(self.neurotransmitters_path)
         cols = set(table.column_names)
-        body_col = _first(cols, "bodyId", "body_id", "id")
-        nt_col = _first(cols, "predicted_nt", "neurotransmitter", "consensus_nt")
+        body_col = _first(cols, "bodyId", "bodyid", "body_id", "id")
+        nt_col = _first(cols, "predicted_nt", "neurotransmitter", "consensus_nt", "nt")
         data = table.select([body_col, nt_col]).to_pydict()
-        return {int(body): str(value) for body, value in zip(data[body_col], data[nt_col]) if value is not None}
+        return {
+            int(body): str(value).strip()
+            for body, value in zip(data[body_col], data[nt_col])
+            if value is not None
+        }
 
     @staticmethod
     def _make_neuron(body: int, cell_type: str, nt: dict[int, str]) -> VisualNeuron:
-        value = nt.get(body)
         low = cell_type.lower()
-        role = "motion_detector" if low in {x.lower() for x in T4_TYPES + T5_TYPES} else "visual_entry" if low in {"l1", "l2"} else "visual_interneuron"
-        return VisualNeuron(body, cell_type, role, value, NT_SIGN.get((value or "").lower(), 0.0))
+        if low in {name.lower() for name in T4_TYPES + T5_TYPES}:
+            role = "motion_detector"
+        elif low in {"l1", "l2"}:
+            role = "visual_entry"
+        else:
+            role = "motion_interneuron"
+        transmitter = nt.get(body)
+        return VisualNeuron(body, cell_type, role, transmitter, NT_SIGN.get((transmitter or "").lower(), 0.0))
 
-    @staticmethod
-    def _group(annotations: dict[int, str], index: dict[int, int], name: str) -> tuple[int, ...]:
-        return tuple(index[body] for body in sorted(annotations) if annotations[body].lower() == name.lower())
-
-    @staticmethod
-    def _partition(annotations: dict[int, str], index: dict[int, int], names: tuple[str, ...]) -> tuple[tuple[int, ...], ...]:
-        wanted = {x.lower() for x in names}
-        ids = [index[body] for body in sorted(annotations) if annotations[body].lower() in wanted]
-        groups = [[] for _ in range(4)]
-        for position, neuron in enumerate(ids):
-            groups[position % 4].append(neuron)
-        return tuple(tuple(group) for group in groups)
 
 def _first(columns: set[str], *names: str) -> str:
     for name in names:
