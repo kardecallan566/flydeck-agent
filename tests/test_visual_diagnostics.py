@@ -84,8 +84,11 @@ def test_neural_state_is_nonnegative() -> None:
 
 def test_temporal_adaptation_adds_transient_drive() -> None:
     visual = MaleCNSVisualSystem(_circuit(), temporal_gain=1.0)
-    first = make_motion_stimulus("right", width=8, height=8, position=0.2)
-    second = make_motion_stimulus("right", width=8, height=8, position=0.8)
+    # Move the edge one grid cell so the second frame activates the other
+    # spatially separated entry neuron. This tests a genuine positive temporal
+    # difference instead of comparing two non-overlapping positions.
+    first = make_motion_stimulus("right", width=8, height=8, position=0.0)
+    second = make_motion_stimulus("right", width=8, height=8, position=1.0 / 7.0)
     visual.step(first)
     first_drive = tuple(visual.last_entry_drive)
     visual.step(second)
