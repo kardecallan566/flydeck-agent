@@ -20,47 +20,20 @@ At each prediction opportunity the fly agent produces:
 
 `WAIT` is not a market action. It means the fly did not find enough evidence to make a prediction.
 
-The agent is evaluated on:
-
-- directional accuracy;
-- confidence calibration;
-- accuracy of entered predictions;
-- number of skipped rounds;
-- streaks of correct/incorrect predictions;
-- performance across unseen time periods;
-- computational cost.
-
-The primary metric is **accuracy on entered predictions**, but it must always be reported together with coverage (`entered / available rounds`) so the agent cannot obtain a misleading score by predicting only extremely rarely.
-
-## Why this task
-
-This gives the connectome a concrete, repeatable behavioral objective without turning the fly into a conventional trading bot.
-
-The market is the environment. BNB price movement is the sensory signal. The MaleCNS architecture is responsible for transforming observations into a behavioral decision.
+The agent is evaluated on directional accuracy, confidence calibration, entered-prediction accuracy, coverage, streaks, unseen-period performance, and computational cost.
 
 ## Biological direction
 
-The project must use the MaleCNS as an agent architecture rather than as a generic recurrent reservoir.
+The MaleCNS must be treated as the agent architecture rather than as a generic recurrent reservoir. The implementation should preserve real neuron identities, anatomical regions, neuron types, directed connectivity, neurotransmitter information, excitatory/inhibitory effects, recurrent state, learning/plasticity, and explicit sensory/behavioral interfaces.
 
-The implementation should progressively preserve:
-
-1. real MaleCNS neuron identities;
-2. anatomical regions and neuron types;
-3. directed synaptic connectivity;
-4. neurotransmitter information where available;
-5. excitatory/inhibitory effects;
-6. recurrent state and temporal dynamics;
-7. learning/plasticity mechanisms;
-8. explicit sensory and behavioral interfaces.
-
-Artificial input/output pools are temporary infrastructure only and must not be treated as biological mappings.
+Artificial input/output pools are temporary infrastructure only and are not biological mappings.
 
 ## Data protocol
 
-The canonical training data is BNB/USD 5-minute historical price data. Every sample must be chronological. For each prediction round:
+The canonical training data is chronological BNB/USD 5-minute price data. For each round:
 
 ```text
-reference price = price at prediction round start
+reference price = price at round start
              ↓
         fly observes
              ↓
@@ -71,29 +44,21 @@ reference price = price at prediction round start
        outcome resolved
 ```
 
-The training target is strictly derived from the future price relative to the reference price. No future information may enter the observation presented to the fly.
+The future close must never be present in the observation used to produce the prediction.
 
-PancakeSwap notes that its interface uses real-time Binance/TradingView data while Chainlink is used for the prediction round's lock/end prices. Therefore the benchmark should distinguish between the market observation feed and the official prediction outcome feed when reproducing the PancakeSwap task. citeturn0search0
+PancakeSwap documents that its Prediction rounds run every 5 minutes and that UP/DOWN is resolved from the locked/reference price versus the end price. It also documents separate real-time and oracle price feeds, so the benchmark must distinguish the observation feed from the official outcome definition. citeturn0search0
 
 ## Non-goals
 
-The project does not currently aim to:
-
-- execute trades;
-- connect a wallet;
-- place PancakeSwap bets automatically;
-- optimize portfolio return;
-- predict arbitrary crypto assets;
-- simulate all ~166k MaleCNS neurons online;
-- tune the fly into a black-box neural predictor through endless hyperparameter searches.
+The project does not currently aim to execute trades, connect wallets, place PancakeSwap bets automatically, optimize portfolio return, predict arbitrary assets, simulate every MaleCNS neuron online, or tune a black-box predictor through endless parameter searches.
 
 ## Development order
 
-1. Define the exact 5-minute BNB prediction environment.
+1. Build the exact 5-minute BNB prediction environment.
 2. Build a leak-free historical BNB dataset and evaluator.
-3. Build a minimal behavioral fly interface with `UP/DOWN/WAIT`.
-4. Replace artificial reservoir behavior with connectome-derived functional structure.
-5. Incorporate neurotransmitter and anatomical information.
+3. Give the fly a real behavioral interface: `UP/DOWN/WAIT`.
+4. Derive functional structure from MaleCNS instead of using an arbitrary degree-core reservoir.
+5. Incorporate anatomy, neuron types, neurotransmitters, and excitatory/inhibitory signaling.
 6. Add biologically motivated learning/plasticity.
-7. Validate the fly on unseen BNB periods.
+7. Validate on unseen BNB periods.
 8. Only after the behavioral system works, consider broader environments.
