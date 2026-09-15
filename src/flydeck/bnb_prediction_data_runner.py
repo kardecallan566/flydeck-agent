@@ -42,6 +42,37 @@ class BNBPredictionDataset:
             return Prediction.DOWN
         return Prediction.WAIT
 
+    def volatility(self, index: int, window: int = 24) -> float:
+        """Normalized average true range over the preceding window."""
+        start = max(0, index - window + 1)
+        sub_highs = self.highs[start:index + 1]
+        sub_lows = self.lows[start:index + 1]
+        sub_closes = self.closes[start:index + 1]
+        if not sub_closes:
+            return 0.0
+        ranges = [(h - l) / max(1e-9, c) for h, l, c in zip(sub_highs, sub_lows, sub_closes)]
+        return sum(ranges) / len(ranges)
+
+    def volatility_regime(self, index: int, window: int = 24, threshold: float = 0.0035) -> str:
+        """Categorize recent volatility as 'high' or 'low'."""
+        vol = self.volatility(index, window=window)
+        return "high" if vol >= threshold else "low"
+
+    def trend_persistence(self, index: int, window: int = 24) -> float:
+        """Fraction of consecutive price moves that continue in the same direction."""
+        start = max(0, index - window)
+        window_closes = self.closes[start:index + 1]
+        if len(window_closes) < 3:
+            return 0.5
+        diffs = [b - a for a, b in zip(window_closes, window_closes[1:])]
+        same_dir = sum(a * b > 0 for a, b in zip(diffs, diffs[1:]))
+        return same_dir / max(1, len(diffs) - 1)
+
+    def trend_regime(self, index: int, window: int = 24, threshold: float = 0.45) -> str:
+        """Categorize market state as 'trending' (directional momentum) or 'chop' (ranging/reverting)."""
+        persist = self.trend_persistence(index, window=window)
+        return "trending" if persist >= threshold else "chop"
+
 
 def load_bnb_5m_csv(path: str | Path) -> BNBPredictionDataset:
     with Path(path).open("r", encoding="utf-8", newline="") as handle:
@@ -81,20 +112,51 @@ def load_bnb_5m_csv(path: str | Path) -> BNBPredictionDataset:
 
 
 def download_bnb_5m_csv(path: str | Path, limit: int = 1000) -> Path:
-    if not 2 <= limit <= 1000:
-        raise ValueError("limit must be between 2 and 1000")
+    if limit < 2:
+        raise ValueError("limit must be at least two")
     from urllib.parse import urlencode
     import json
 
-    query = urlencode({"symbol": "BNBUSDT", "interval": "5m", "limit": limit})
-    with urlopen(f"{BINANCE_KLINES_URL}?{query}", timeout=30) as response:
-        rows = json.load(response)
+    all_rows = []
+    remaining = limit
+    end_time = None
+
+    while remaining > 0:
+        batch_limit = min(1000, remaining)
+        params: dict[str, str | int] = {
+            "symbol": "BNBUSDT",
+            "interval": "5m",
+            "limit": batch_limit,
+        }
+        if end_time is not None:
+            params["endTime"] = end_time
+        query = urlencode(params)
+        with urlopen(f"{BINANCE_KLINES_URL}?{query}", timeout=30) as response:
+            batch = json.load(response)
+        if not batch:
+            break
+        all_rows = batch + all_rows
+        remaining -= len(batch)
+        first_open_time = int(batch[0][0])
+        end_time = first_open_time - 1
+        if len(batch) < batch_limit:
+            break
+
+    # Deduplicate and sort chronologically
+    seen = set()
+    deduped = []
+    for row in sorted(all_rows, key=lambda r: int(r[0])):
+        ts = int(row[0])
+        if ts not in seen:
+            seen.add(ts)
+            deduped.append(row)
+
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(["timestamp", "open", "high", "low", "close", "volume"])
-        for row in rows:
+        for row in deduped:
             writer.writerow(row[:6])
     return path
 
