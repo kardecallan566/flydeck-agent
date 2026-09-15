@@ -3,6 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
+try:
+    import numpy as np
+except ImportError:
+    np = None
+
 from .directional_mechanism import SpatialOffsetDirectionalMechanism
 from .market_retina import BNBMarketRetina, RetinaStimulus
 from .receptive_fields import infer_receptive_fields
@@ -30,6 +35,7 @@ class MaleCNSVisualSystem:
         fast_alpha: float = 0.75,
         slow_inhibition_alpha: float = 0.20,
         receptive_field_iterations: int = 12,
+        receptive_fields: dict[int, ReceptiveField] | None = None,
     ) -> None:
         if (
             not 0.0 < leak <= 1.0
@@ -72,9 +78,24 @@ class MaleCNSVisualSystem:
                 (edge.target, normalized * source_sign * synapse_scale)
             )
 
+        if np is not None:
+            self._has_numpy = True
+            self._state_np = np.zeros(len(circuit.neurons), dtype=np.float32)
+            self._filtered_state_np = np.zeros(len(circuit.neurons), dtype=np.float32)
+            self._alphas_np = np.array([self._alpha(i) for i in range(len(circuit.neurons))], dtype=np.float32)
+            self._edge_sources = np.array([e.source for e in circuit.edges], dtype=np.int32)
+            self._edge_targets = np.array([e.target for e in circuit.edges], dtype=np.int32)
+            source_signs = np.array([circuit.neurons[e.source].sign for e in circuit.edges], dtype=np.float32)
+            weights = np.array([e.weight for e in circuit.edges], dtype=np.float32)
+            inc = np.array(incoming, dtype=np.float32)[self._edge_targets]
+            inc = np.maximum(1e-12, inc)
+            self._norm_edge_weights = (weights / inc) * source_signs * synapse_scale
+        else:
+            self._has_numpy = False
+
         # Directional selectivity is computed from the connectome-derived
         # spatially offset excitation/inhibition components of each T4/T5 RF.
-        self.receptive_fields = infer_receptive_fields(
+        self.receptive_fields = receptive_fields if receptive_fields is not None else infer_receptive_fields(
             circuit,
             iterations=receptive_field_iterations,
         )
@@ -97,6 +118,9 @@ class MaleCNSVisualSystem:
     def reset(self) -> None:
         self.state = [0.0] * len(self.state)
         self.filtered_state = [0.0] * len(self.state)
+        if self._has_numpy:
+            self._state_np.fill(0.0)
+            self._filtered_state_np.fill(0.0)
         self.last_stimulus = None
         self.last_entry_drive = [0.0] * len(self.state)
         self.previous_on_field = None
@@ -111,27 +135,38 @@ class MaleCNSVisualSystem:
         drive = self._entry_drive(stimulus)
         self.last_entry_drive = drive
 
-        for _ in range(self.micro_steps):
-            recurrent = [0.0] * len(self.state)
+        if self._has_numpy:
+            drive_np = np.array(drive, dtype=np.float32)
+            leak = self.leak
+            for _ in range(self.micro_steps):
+                self._filtered_state_np += self._alphas_np * (self._state_np - self._filtered_state_np)
+                contributions = self._filtered_state_np[self._edge_sources] * self._norm_edge_weights
+                recurrent = np.bincount(self._edge_targets, weights=contributions, minlength=len(self.state))
+                target_act = np.maximum(0.0, np.tanh(drive_np + recurrent))
+                self._state_np = (1.0 - leak) * self._state_np + leak * target_act
+            self.state = self._state_np.tolist()
+        else:
+            for _ in range(self.micro_steps):
+                recurrent = [0.0] * len(self.state)
 
-            # Upstream visual dynamics use fast excitatory and slow inhibitory
-            # source filtering. Directional T4/T5 computation is applied after
-            # this recurrent propagation using their spatially offset RFs.
-            for source, outgoing in enumerate(self.outgoing):
-                activity = self.state[source]
-                if activity <= 1e-12:
-                    self.filtered_state[source] *= self._alpha(source)
-                    continue
-                alpha = self._alpha(source)
-                self.filtered_state[source] += alpha * (activity - self.filtered_state[source])
-                for target, weight in outgoing:
-                    recurrent[target] += self.filtered_state[source] * weight
+                # Upstream visual dynamics use fast excitatory and slow inhibitory
+                # source filtering. Directional T4/T5 computation is applied after
+                # this recurrent propagation using their spatially offset RFs.
+                for source, outgoing in enumerate(self.outgoing):
+                    activity = self.state[source]
+                    if activity <= 1e-12:
+                        self.filtered_state[source] *= self._alpha(source)
+                        continue
+                    alpha = self._alpha(source)
+                    self.filtered_state[source] += alpha * (activity - self.filtered_state[source])
+                    for target, weight in outgoing:
+                        recurrent[target] += self.filtered_state[source] * weight
 
-            next_state = [0.0] * len(self.state)
-            for index in range(len(next_state)):
-                target = max(0.0, math.tanh(drive[index] + recurrent[index]))
-                next_state[index] = (1.0 - self.leak) * self.state[index] + self.leak * target
-            self.state = next_state
+                next_state = [0.0] * len(self.state)
+                for index in range(len(next_state)):
+                    target = max(0.0, math.tanh(drive[index] + recurrent[index]))
+                    next_state[index] = (1.0 - self.leak) * self.state[index] + self.leak * target
+                self.state = next_state
 
         # T4 is the ON motion detector and T5 is the OFF motion detector. Each
         # population owns its temporal trace so ON and OFF do not contaminate
@@ -153,6 +188,8 @@ class MaleCNSVisualSystem:
             for group, value in zip(groups, values):
                 for index in group:
                     self.state[index] = value
+                    if self._has_numpy:
+                        self._state_np[index] = value
 
         self.previous_on_field = stimulus.on_field
         self.previous_off_field = stimulus.off_field

@@ -143,10 +143,15 @@ def run_motion_diagnostic(
     direction: str,
     polarity: str = "on",
     steps: int = 12,
+    visual: MaleCNSVisualSystem | None = None,
+    fields: dict | None = None,
 ) -> MotionDiagnostic:
     """Run one causal motion sequence through the extracted circuit."""
     sequence = make_motion_sequence(direction, polarity=polarity, steps=steps)
-    visual = MaleCNSVisualSystem(circuit)
+    if visual is None:
+        visual = MaleCNSVisualSystem(circuit, receptive_fields=fields)
+    else:
+        visual.reset()
     temporal_t4: list[tuple[float, float, float, float]] = []
     temporal_t5: list[tuple[float, float, float, float]] = []
 
@@ -171,10 +176,16 @@ def run_motion_diagnostic(
     )
 
 
-def run_motion_suite(circuit: VisualCircuit, *, steps: int = 12) -> tuple[MotionDiagnostic, ...]:
+def run_motion_suite(
+    circuit: VisualCircuit,
+    *,
+    steps: int = 12,
+    fields: dict | None = None,
+) -> tuple[MotionDiagnostic, ...]:
     """Run ON/OFF controls for all four motion directions."""
+    visual = MaleCNSVisualSystem(circuit, receptive_fields=fields)
     return tuple(
-        run_motion_diagnostic(circuit, direction=direction, polarity=polarity, steps=steps)
+        run_motion_diagnostic(circuit, direction=direction, polarity=polarity, steps=steps, visual=visual)
         for polarity in ("on", "off")
         for direction in DIRECTIONS
     )

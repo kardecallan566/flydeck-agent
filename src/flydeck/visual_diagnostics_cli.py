@@ -34,7 +34,7 @@ def main() -> int:
     print(summarize_receptive_fields(circuit, fields))
     print()
 
-    results = run_motion_suite(circuit, steps=args.steps)
+    results = run_motion_suite(circuit, steps=args.steps, fields=fields)
     for diagnostic in results:
         print(format_diagnostic(diagnostic))
         print(format_temporal_summary(diagnostic))

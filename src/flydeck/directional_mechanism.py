@@ -50,12 +50,12 @@ class SpatialOffsetDirectionalMechanism:
                 else self._previous_stimulus.off_field
             )
 
-        # Fields are keyed by the circuit's global neuron index. Do not use
-        # len(fields) as the vector size: a sparse set can contain indices such
-        # as 100, 5000, 30000.
+        # Iterate only over the requested output neurons for efficiency
+        target_indices = [idx for group in outputs for idx in group] if outputs else list(self.fields.keys())
         values: dict[int, float] = {}
-        for index, rf in self.fields.items():
-            if rf.excitatory_x is None or rf.excitatory_y is None:
+        for index in target_indices:
+            rf = self.fields.get(index)
+            if rf is None or rf.excitatory_x is None or rf.excitatory_y is None:
                 continue
             excitation = _sample(field, rf.excitatory_x, rf.excitatory_y)
             previous_excitation = _sample(previous_field, rf.excitatory_x, rf.excitatory_y)
