@@ -6,6 +6,7 @@ from pathlib import Path
 from .bnb_prediction import Prediction
 from .bnb_prediction_agent import BNBObservation, FlyBNBPredictionAgent, FlyDecision
 from .data import BinanceMarketDataProvider, MarketCandle, MarketDataService, inspect_dataset
+from .data.market_cache import write_csv
 from .malecns import MaleCNSCircuit
 
 
@@ -83,10 +84,6 @@ class BNBPredictionDataset:
         return "trending" if self.trend_persistence(index, window=window) >= threshold else "chop"
 
 
-def _to_bnb_dataset(candles: tuple[MarketCandle, ...]) -> BNBPredictionDataset:
-    return BNBPredictionDataset.from_candles(candles)
-
-
 def load_bnb_5m_csv(path: str | Path) -> BNBPredictionDataset:
     """Load legacy or canonical CSV through the shared market-data layer."""
     service = MarketDataService(BinanceMarketDataProvider())
@@ -96,7 +93,7 @@ def load_bnb_5m_csv(path: str | Path) -> BNBPredictionDataset:
         raise ValueError(
             f"BNB data contains {health.gaps} interval gaps; repair the dataset before benchmarking"
         )
-    return _to_bnb_dataset(dataset.candles)
+    return BNBPredictionDataset.from_candles(dataset.candles)
 
 
 def download_bnb_5m_csv(path: str | Path, limit: int = 1000) -> Path:
@@ -104,20 +101,7 @@ def download_bnb_5m_csv(path: str | Path, limit: int = 1000) -> Path:
     destination = Path(path)
     service = MarketDataService(BinanceMarketDataProvider(), cache_root=destination.parent)
     dataset = service.fetch("BNBUSDT", "5m", limit=limit)
-
-    # Keep the historical public function's exact destination while using the
-    # canonical atomic CSV writer behind the scenes.
-    from .data.market_cache import write_csv
-
-    write_csv(
-        type("Dataset", (), {
-            "symbol": dataset.symbol,
-            "interval": dataset.interval,
-            "candles": dataset.candles,
-            "source": dataset.source,
-        })(),
-        destination,
-    )
+    write_csv(dataset, destination)
     return destination
 
 
