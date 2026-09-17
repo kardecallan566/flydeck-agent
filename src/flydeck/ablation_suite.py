@@ -49,14 +49,14 @@ def run_ablation_suite(
     start: int,
     end: int,
     context: int = 32,
-    confidence_threshold: float = 0.20,
+    confidence_threshold: float = 0.15,
     receptive_fields: dict[int, ReceptiveField] | None = None,
 ) -> tuple[AblationResult, ...]:
     """Evaluate full fly visual agent against mutilation variants removing biological mechanisms."""
     outcomes = tuple(dataset.outcome(index) for index in range(start, end))
 
     variants = (
-        ("Full Model (Bio-Inspired CX+LPTC)", {}),
+        ("Full Model (Phase 6 Integrated)", {}),
         ("Ablation: No LPTC Wide-Field Pooling", {"ablate_lptc": True}),
         ("Ablation: No Central Complex Memory", {"ablate_working_memory": True}),
         ("Ablation: No Synaptic Adaptation", {"ablate_adaptation": True}),
@@ -64,6 +64,8 @@ def run_ablation_suite(
         ("Ablation: No Conflict WAIT Engine", {"ablate_conflict_engine": True}),
         ("Ablation: No T4/T5 Motion Detectors", {"ablate_t4_t5": True}),
         ("Ablation: No Spatial Offset (Collapsed)", {"ablate_spatial": True}),
+        ("Ablation: No Mushroom Body Memory", {"ablate_mushroom_body": True}),
+        ("Ablation: No Predictive Coding Loop", {"ablate_predictive_coding": True}),
     )
 
     results: list[AblationResult] = []
