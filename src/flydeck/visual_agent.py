@@ -8,13 +8,16 @@ try:
 except ImportError:
     np = None
 
+from .attention_system import AttentionState, TopDownAttentionModule
 from .bnb_prediction import Prediction
 from .central_complex import CentralComplexState, CentralComplexSystem
 from .decision_engine import DecoupledDecision, DecisionReason, DynamicDecisionEngine
 from .directional_mechanism import SpatialOffsetDirectionalMechanism
+from .giant_fiber import GiantFiberEscapeCircuit, ShockState
 from .internal_state import AgentInternalState
 from .lptc_system import LPTCOutput, LobulaPlateTangentialSystem
 from .market_retina import BNBMarketRetina, RetinaStimulus
+from .metabolic_control import MetabolicRiskController, MetabolicState
 from .mushroom_body import MushroomBodyAssociativeMemory, MushroomBodyOutput
 from .neural_diagnostics import CandleDiagnosticEntry, NeuralDiagnosticsTracer
 from .predictive_coding import PredictiveCodingEngine, PredictiveCodingUpdate
@@ -70,6 +73,9 @@ class MaleCNSVisualSystem:
         ablate_conflict_engine: bool = False,
         ablate_mushroom_body: bool = False,
         ablate_predictive_coding: bool = False,
+        ablate_attention: bool = False,
+        ablate_giant_fiber: bool = False,
+        ablate_metabolic: bool = False,
         conflict_threshold: float = 0.35,
     ) -> None:
         if (
@@ -111,6 +117,9 @@ class MaleCNSVisualSystem:
         self.ablate_conflict_engine = ablate_conflict_engine
         self.ablate_mushroom_body = ablate_mushroom_body
         self.ablate_predictive_coding = ablate_predictive_coding
+        self.ablate_attention = ablate_attention
+        self.ablate_giant_fiber = ablate_giant_fiber
+        self.ablate_metabolic = ablate_metabolic
         self.conflict_threshold = conflict_threshold
 
         self.trend_bias = 0.0
@@ -146,6 +155,15 @@ class MaleCNSVisualSystem:
             max_conflict_tolerance=conflict_threshold,
             enabled=not ablate_conflict_engine,
         )
+        self.attention = TopDownAttentionModule(
+            enabled=not ablate_attention,
+        )
+        self.giant_fiber = GiantFiberEscapeCircuit(
+            enabled=not ablate_giant_fiber,
+        )
+        self.metabolic_control = MetabolicRiskController(
+            enabled=not ablate_metabolic,
+        )
         self.diagnostics = NeuralDiagnosticsTracer()
 
         # Continuous Agent Internal State flowing across rounds
@@ -155,6 +173,8 @@ class MaleCNSVisualSystem:
         self.last_cx_state: CentralComplexState | None = None
         self.last_mb_out: MushroomBodyOutput | None = None
         self.last_pred_update: PredictiveCodingUpdate | None = None
+        self.last_shock_state: ShockState | None = None
+        self.last_attention_state: AttentionState | None = None
 
         # Previous step price for causal reinforcement
         self._previous_price: float | None = None
@@ -244,6 +264,9 @@ class MaleCNSVisualSystem:
         self.mushroom_body.reset()
         self.predictive_coding.reset()
         self.decision_engine.reset()
+        self.attention.reset()
+        self.giant_fiber.reset()
+        self.metabolic_control.reset()
         self.diagnostics.reset()
         self.internal_state = AgentInternalState()
         self.last_decoupled_decision = None
@@ -251,15 +274,29 @@ class MaleCNSVisualSystem:
         self.last_cx_state = None
         self.last_mb_out = None
         self.last_pred_update = None
+        self.last_shock_state = None
+        self.last_attention_state = None
         self._previous_price = None
 
     def step(self, stimulus: RetinaStimulus, current_price: float | None = None) -> tuple[float, ...]:
-        # 1. Causal Reinforcement of Mushroom Body memory from prior step
+        # 1. Causal Reinforcement & Shock Detection from prior step
+        observed_ret = 0.0
         if current_price is not None and self._previous_price is not None:
             observed_ret = (current_price / self._previous_price - 1.0) * 100.0
             self.mushroom_body.reinforce(observed_ret)
+            self.metabolic_control.update_feedback(observed_ret)
         if current_price is not None:
             self._previous_price = current_price
+
+        # Giant Fiber regime shock evaluation
+        pred_err = self.internal_state.prediction_error
+        shock_state = self.giant_fiber.step(
+            current_return_pct=observed_ret,
+            prediction_error=pred_err,
+            volatility_contrast=stimulus.volatility_contrast,
+            volume_contrast=stimulus.volume_contrast,
+        )
+        self.last_shock_state = shock_state
 
         self.last_stimulus = stimulus
         drive = self._entry_drive(stimulus)
@@ -333,25 +370,28 @@ class MaleCNSVisualSystem:
 
     def _entry_drive(self, stimulus: RetinaStimulus) -> list[float]:
         drive = [0.0] * len(self.state)
-        gain = self.temporal_gain
+        # Top-down attention modulates sensory gain
+        att_gain = self.internal_state.sensory_gain
+        gain = self.temporal_gain * att_gain
+
         if self.circuit.has_spatial_mapping:
             for neuron in self.circuit.l1_inputs:
                 n = self.circuit.neurons[neuron]
                 current = _sample_field(stimulus.on_field, n.spatial_x, n.spatial_y)
                 previous = _sample_field(self.previous_on_field, n.spatial_x, n.spatial_y)
-                drive[neuron] = max(0.0, current + gain * (current - previous))
+                drive[neuron] = max(0.0, (current + gain * (current - previous)) * att_gain)
             for neuron in self.circuit.l2_inputs:
                 n = self.circuit.neurons[neuron]
                 current = _sample_field(stimulus.off_field, n.spatial_x, n.spatial_y)
                 previous = _sample_field(self.previous_off_field, n.spatial_x, n.spatial_y)
-                drive[neuron] = max(0.0, current + gain * (current - previous))
+                drive[neuron] = max(0.0, (current + gain * (current - previous)) * att_gain)
         else:
             on_strength = max((max(row) for row in stimulus.on_field), default=0.0)
             off_strength = max((max(row) for row in stimulus.off_field), default=0.0)
             previous_on = max((max(row) for row in self.previous_on_field), default=0.0)
             previous_off = max((max(row) for row in self.previous_off_field), default=0.0)
-            on_strength = max(0.0, on_strength + gain * (on_strength - previous_on))
-            off_strength = max(0.0, off_strength + gain * (off_strength - previous_off))
+            on_strength = max(0.0, (on_strength + gain * (on_strength - previous_on)) * att_gain)
+            off_strength = max(0.0, (off_strength + gain * (off_strength - previous_off)) * att_gain)
             for neuron in self.circuit.l1_inputs:
                 drive[neuron] = on_strength
             for neuron in self.circuit.l2_inputs:
@@ -362,7 +402,22 @@ class MaleCNSVisualSystem:
         if not 0.0 <= minimum_confidence <= 1.0:
             raise ValueError("minimum_confidence must be between 0 and 1")
 
-        # 1. Motion Stream (LPTC wide-field)
+        st = self.internal_state
+        volatility = self.last_stimulus.volatility_contrast if self.last_stimulus else 0.0035
+        coherence = self.last_stimulus.coherence if self.last_stimulus else 0.5
+
+        # 1. Top-Down Attention Step
+        att_state = self.attention.step(
+            arousal=st.arousal,
+            prediction_error=st.prediction_error,
+            uncertainty=st.uncertainty,
+            volatility=volatility,
+        )
+        self.last_attention_state = att_state
+        st.attention_focus = att_state.temporal_focus
+        st.sensory_gain = att_state.sensory_gain
+
+        # 2. Motion Stream (LPTC wide-field)
         if self.ablate_t4_t5:
             half = len(self.state) // 2
             dir_up = sum(self.state[:half]) / max(1, half)
@@ -372,29 +427,34 @@ class MaleCNSVisualSystem:
         else:
             lptc_signal = self.last_lptc_out.vs_net if self.last_lptc_out else 0.0
 
-        # 2. Kinematics Stream (Retina velocity and acceleration)
+        # 3. Kinematics Stream (Retina velocity and acceleration)
         velocity = self.last_stimulus.velocity if self.last_stimulus else 0.0
         acceleration = self.last_stimulus.acceleration if self.last_stimulus else 0.0
         short_velocity = self.last_stimulus.short_velocity if self.last_stimulus else velocity
         retina_vel_signal = max(-1.0, min(1.0, 0.65 * velocity + 0.35 * short_velocity + 0.25 * acceleration))
 
-        # 3. Perceptual Balance (L1 vs L2)
+        # 4. Perceptual Balance (L1 vs L2)
         l1_act = sum(self.state[n] for n in self.circuit.l1_inputs) / max(1, len(self.circuit.l1_inputs))
         l2_act = sum(self.state[n] for n in self.circuit.l2_inputs) / max(1, len(self.circuit.l2_inputs))
         bal_tot = l1_act + l2_act
         balance_signal = (l1_act - l2_act) / bal_tot if bal_tot > 1e-12 else 0.0
 
-        # 4. Central Complex Integration
-        volatility = self.last_stimulus.volatility_contrast if self.last_stimulus else 0.0035
-        coherence = self.last_stimulus.coherence if self.last_stimulus else 0.5
+        # 5. Central Complex Integration (Recurrent feedback from MB valence + Giant Fiber reset)
+        mb_prior_valence = self.last_mb_out.valence if self.last_mb_out else 0.0
+        is_shock = self.last_shock_state.is_shock if self.last_shock_state else False
+        st.is_shock = is_shock
+        st.shock_magnitude = self.last_shock_state.shock_magnitude if self.last_shock_state else 0.0
+
         cx_state = self.central_complex.step(
             sensory_signal=0.50 * lptc_signal + 0.50 * retina_vel_signal,
             volatility=volatility,
             coherence=coherence,
+            mb_feedback=mb_prior_valence,
+            reset_heading=is_shock,
         )
         self.last_cx_state = cx_state
 
-        # 5. Mushroom Body Sparse Associative Memory
+        # 6. Mushroom Body Sparse Associative Memory
         context_vector = (
             lptc_signal,
             retina_vel_signal,
@@ -408,7 +468,7 @@ class MaleCNSVisualSystem:
         mb_out = self.mushroom_body.perceive(context_vector)
         self.last_mb_out = mb_out
 
-        # 6. Predictive Coding Loop & Hypothesis Competition
+        # 7. Predictive Coding Loop & Hypothesis Competition
         pred_update = self.predictive_coding.step(
             observed_motion=lptc_signal,
             cx_context=cx_state.attractor_heading,
@@ -417,8 +477,11 @@ class MaleCNSVisualSystem:
         )
         self.last_pred_update = pred_update
 
-        # 7. Synthesize Continuous Internal State
-        st = self.internal_state
+        # 8. Metabolic Risk Step
+        meta_state = self.metabolic_control.step()
+        st.metabolic_energy = meta_state.energy_level
+
+        # 9. Synthesize Continuous Internal State
         st.perceptual_balance = balance_signal
         st.retina_velocity = retina_vel_signal
         st.retina_acceleration = acceleration
@@ -441,8 +504,12 @@ class MaleCNSVisualSystem:
         st.uncertainty = pred_update.uncertainty
         st.hypothesis_probs = pred_update.hypothesis_probs
 
-        # 8. Decoupled Action Selection via DynamicDecisionEngine
-        decision = self.decision_engine.decide(st, minimum_confidence=minimum_confidence)
+        # 10. Decoupled Action Selection via DynamicDecisionEngine with Metabolic Modifier
+        decision = self.decision_engine.decide(
+            st,
+            minimum_confidence=minimum_confidence,
+            metabolic_modifier=meta_state.threshold_modifier,
+        )
         self.last_decoupled_decision = decision
         st.conflict = decision.conflict
         st.temporal_consistency = decision.temporal_consistency
@@ -508,6 +575,9 @@ class FlyVisualPredictionAgent:
         ablate_conflict_engine: bool = False,
         ablate_mushroom_body: bool = False,
         ablate_predictive_coding: bool = False,
+        ablate_attention: bool = False,
+        ablate_giant_fiber: bool = False,
+        ablate_metabolic: bool = False,
         conflict_threshold: float = 0.35,
     ) -> None:
         self.retina = BNBMarketRetina(retina_width, retina_height)
@@ -532,6 +602,9 @@ class FlyVisualPredictionAgent:
             ablate_conflict_engine=ablate_conflict_engine,
             ablate_mushroom_body=ablate_mushroom_body,
             ablate_predictive_coding=ablate_predictive_coding,
+            ablate_attention=ablate_attention,
+            ablate_giant_fiber=ablate_giant_fiber,
+            ablate_metabolic=ablate_metabolic,
             conflict_threshold=conflict_threshold,
         )
         self.confidence_threshold = confidence_threshold

@@ -78,7 +78,7 @@ def _extract_validation_features(
         prices = dataset.closes[max(0, index - context + 1) : index + 1]
         volumes = dataset.volumes[max(0, index - context + 1) : index + 1]
         stimulus = retina.encode(prices, volumes=volumes)
-        visual.step(stimulus)
+        visual.step(stimulus, current_price=prices[-1] if len(prices) > 0 else None)
 
         # Directional features
         t4 = visual._directional_activity(circuit.t4_outputs)

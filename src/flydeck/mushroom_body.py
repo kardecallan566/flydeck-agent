@@ -41,6 +41,7 @@ class MushroomBodyAssociativeMemory:
         sparsity_fraction: float = 0.05,
         learning_rate: float = 0.08,
         weight_decay: float = 0.002,
+        homeostatic_target_norm: float = 3.0,
         seed: int = 42,
         enabled: bool = True,
     ) -> None:
@@ -54,6 +55,7 @@ class MushroomBodyAssociativeMemory:
         self.k_active = max(1, int(round(kc_count * sparsity_fraction)))
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
+        self.homeostatic_target_norm = homeostatic_target_norm
         self.enabled = enabled
 
         # Deterministic pseudo-random projection from input context to Kenyon Cells
@@ -156,8 +158,12 @@ class MushroomBodyAssociativeMemory:
             self._mbon_weights_np[list(active)] *= (1.0 - self.weight_decay)
             # Associative LTP / LTD: delta W = eta * DA
             self._mbon_weights_np[list(active)] += self.learning_rate * dopamine_signal
-            # Clip weights to prevent runaway excitation
-            np.clip(self._mbon_weights_np, -2.0, 2.0, out=self._mbon_weights_np)
+            # Homeostatic synaptic downscaling (preserves relative contrast, prevents saturation)
+            norm = float(np.linalg.norm(self._mbon_weights_np))
+            if norm > self.homeostatic_target_norm:
+                self._mbon_weights_np *= (self.homeostatic_target_norm / norm)
+            else:
+                np.clip(self._mbon_weights_np, -2.0, 2.0, out=self._mbon_weights_np)
         else:
             for idx in active:
                 w = self._mbon_weights_np[idx] * (1.0 - self.weight_decay)

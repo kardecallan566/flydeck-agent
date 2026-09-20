@@ -23,6 +23,7 @@ class DecisionReason(str, Enum):
     WAIT_HIGH_CONFLICT = "WAIT_HIGH_CONFLICT"
     WAIT_HIGH_UNCERTAINTY = "WAIT_HIGH_UNCERTAINTY"
     WAIT_NEUTRAL_REGIME = "WAIT_NEUTRAL_REGIME"
+    WAIT_REGIME_SHOCK = "WAIT_REGIME_SHOCK"
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +65,7 @@ class DynamicDecisionEngine:
         self,
         state: AgentInternalState,
         minimum_confidence: float | None = None,
+        metabolic_modifier: float = 0.0,
     ) -> DecoupledDecision:
         """Evaluate internal state and select action: UP, DOWN, or WAIT."""
         conf_thresh = minimum_confidence if minimum_confidence is not None else self.base_confidence
@@ -127,12 +129,27 @@ class DynamicDecisionEngine:
             adaptive_thresh += (0.25 - state.coherence) * 0.15
         adaptive_thresh += max(0.0, state.arousal - 0.20) * 0.12
         adaptive_thresh += conflict_val * 0.18
+        adaptive_thresh += metabolic_modifier
 
         # Bonus threshold relaxation if temporal consistency is very high
         if temporal_consistency >= 0.80 and confidence > 0.10:
             adaptive_thresh = max(0.08, adaptive_thresh - 0.03)
 
         # 6. Action Selection with Reason Attribution
+        # Emergency escape triggered by Giant Fiber circuit on looming shock
+        if state.is_shock:
+            return DecoupledDecision(
+                action=Prediction.WAIT,
+                reason=DecisionReason.WAIT_REGIME_SHOCK,
+                up_score=up_score,
+                down_score=down_score,
+                confidence=confidence,
+                wait=True,
+                conflict=conflict_val,
+                uncertainty=state.uncertainty,
+                temporal_consistency=temporal_consistency,
+            )
+
         if p_neutral > 0.60 and confidence < 0.12:
             return DecoupledDecision(
                 action=Prediction.WAIT,
@@ -190,6 +207,19 @@ class DynamicDecisionEngine:
             action = Prediction.UP
             reason = DecisionReason.COMMIT_UP
         else:
+            # Calibrate DOWN to avoid committing on noisy pullbacks
+            if p_down < 0.38 and confidence < (adaptive_thresh + 0.03):
+                return DecoupledDecision(
+                    action=Prediction.WAIT,
+                    reason=DecisionReason.WAIT_LOW_CONFIDENCE,
+                    up_score=up_score,
+                    down_score=down_score,
+                    confidence=confidence,
+                    wait=True,
+                    conflict=conflict_val,
+                    uncertainty=state.uncertainty,
+                    temporal_consistency=temporal_consistency,
+                )
             action = Prediction.DOWN
             reason = DecisionReason.COMMIT_DOWN
 

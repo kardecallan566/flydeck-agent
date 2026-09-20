@@ -71,8 +71,16 @@ class CentralComplexSystem:
         sensory_signal: float,
         volatility: float = 0.003,
         coherence: float = 0.5,
+        mb_feedback: float = 0.0,
+        reset_heading: bool = False,
     ) -> CentralComplexState:
-        """Update internal state with current sensory input and market conditions."""
+        """Update internal state with current sensory input, MB feedback and market conditions."""
+        if reset_heading:
+            self._attractor_heading = 0.0
+            self._fast_bias = sensory_signal
+            self._slow_bias = 0.50 * sensory_signal
+            self._arousal = min(1.0, self._arousal + 0.40)
+
         if not self.enabled:
             return CentralComplexState(
                 fast_bias=sensory_signal,
@@ -103,9 +111,12 @@ class CentralComplexSystem:
         self._slow_bias = (1.0 - self.tau_slow) * self._slow_bias + self.tau_slow * sensory_signal
         self._slow_bias = max(-1.0, min(1.0, self._slow_bias))
 
-        # 4. Ring Attractor Heading (Persistent Working Memory)
-        # Blends fast and slow memory with attractor persistence
-        target_heading = 0.65 * self._fast_bias + 0.35 * self._slow_bias
+        # 4. Ring Attractor Heading (Persistent Working Memory + MB Feedback)
+        base_heading = 0.65 * self._fast_bias + 0.35 * self._slow_bias
+        if mb_feedback != 0.0:
+            target_heading = 0.85 * base_heading + 0.15 * mb_feedback
+        else:
+            target_heading = base_heading
         self._attractor_heading = (1.0 - self.attractor_leak) * self._attractor_heading + self.attractor_leak * target_heading
         self._attractor_heading = max(-1.0, min(1.0, self._attractor_heading))
 

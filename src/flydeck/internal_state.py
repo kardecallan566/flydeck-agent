@@ -55,6 +55,13 @@ class AgentInternalState:
     conflict: float = 0.0               # Pairwise disagreement across active pathways [0, 1]
     temporal_consistency: float = 0.0   # Stability of hypothesis over sliding window
 
+    # 8. Phase 8: Attention, Giant Fiber Shock & Metabolism
+    attention_focus: float = 1.0        # Temporal focus on recent candles [0.5, 2.0]
+    sensory_gain: float = 1.0           # Excitability multiplier on entry neurons [0.7, 1.5]
+    is_shock: bool = False              # Emergency escape / regime shock triggered
+    shock_magnitude: float = 0.0        # Looming shock intensity [0, 1]
+    metabolic_energy: float = 1.0       # Nutritional / risk appetite reserve [0.5, 1.5]
+
     # Hypothesis distribution (UP, DOWN, CHOP)
     hypothesis_probs: tuple[float, float, float] = (0.333, 0.333, 0.334)
 
@@ -82,6 +89,11 @@ class AgentInternalState:
             uncertainty=self.uncertainty,
             conflict=self.conflict,
             temporal_consistency=self.temporal_consistency,
+            attention_focus=self.attention_focus,
+            sensory_gain=self.sensory_gain,
+            is_shock=self.is_shock,
+            shock_magnitude=self.shock_magnitude,
+            metabolic_energy=self.metabolic_energy,
             hypothesis_probs=self.hypothesis_probs,
         )
 
@@ -97,6 +109,11 @@ class AgentInternalState:
             "arousal": self.arousal,
             "conflict": self.conflict,
             "uncertainty": self.uncertainty,
+            "attention_focus": self.attention_focus,
+            "sensory_gain": self.sensory_gain,
+            "is_shock": 1.0 if self.is_shock else 0.0,
+            "shock_magnitude": self.shock_magnitude,
+            "metabolic_energy": self.metabolic_energy,
             "p_up": self.hypothesis_probs[0],
             "p_down": self.hypothesis_probs[1],
             "p_chop": self.hypothesis_probs[2],
