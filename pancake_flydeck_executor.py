@@ -217,11 +217,29 @@ class PancakeFlyDeckBridge:
 
 
 if __name__ == "__main__":
-    # Inicia a ponte FlyDeck -> PancakeSwap
+    import argparse
+
+    parser = argparse.ArgumentParser(description="PancakeSwap Live Prediction Executor (FlyDeck Agent)")
+    parser.add_argument("--circuit", default="data/malecns/motion_visual.json", help="Caminho para o circuito MaleCNS JSON")
+    parser.add_argument("--confidence", type=float, default=0.15, help="Limiar de confiança base do FlyDeck")
+    parser.add_argument("--stake", default="0.00480", help="Valor em BNB por aposta (ex: 0.00480)")
+    parser.add_argument("--max-hourly", type=int, default=6, help="Máximo de operações permitidas por hora")
+    parser.add_argument("--open-browser", action="store_true", help="Abre o navegador na URL do PancakeSwap ao iniciar")
+    parser.add_argument("--login", action="store_true", help="Tenta logar a MetaMask ao iniciar")
+    args = parser.parse_args()
+
+    if args.open_browser:
+        print("[Início] Abrindo o navegador...")
+        abrir_navegador("https://pancakeswap.finance/prediction?token=BNB")
+        time.sleep(4)
+
+    if args.login:
+        logar_navegador()
+
     bridge = PancakeFlyDeckBridge(
-        circuit_path="data/malecns/motion_visual.json",
-        confidence_threshold=0.15,
-        valor_aposta="0.00480",
-        max_execucoes_por_hora=6,  # Até 6 trades por hora (o FlyDeck é naturalmente seletivo em ~1-2 por hora)
+        circuit_path=args.circuit,
+        confidence_threshold=args.confidence,
+        valor_aposta=args.stake,
+        max_execucoes_por_hora=args.max_hourly,
     )
     bridge.iniciar()
