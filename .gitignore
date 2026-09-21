@@ -178,3 +178,5 @@ __marimo__/
 data/real/
 data/malecns/raw/
 data/malecns/*.json
+data/checkpoints/live_fly_brain.json
+data/logs/live_diagnostics.jsonl
