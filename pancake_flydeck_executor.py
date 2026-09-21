@@ -96,7 +96,7 @@ def salvar_previsao(dados: dict[str, Any]) -> None:
         })
 
 
-def up_or_down(direcao: str, valor_aposta: str = "0.00480") -> None:
+def up_or_down(direcao: str, valor_aposta: str = "0.00120") -> None:
     """Executa a ordem física no site do PancakeSwap via interface gráfica."""
     if direcao == "UP":
         print(f"[{time.strftime('%H:%M:%S')}] Executando ordem: UP no PancakeSwap...")
@@ -110,7 +110,7 @@ def up_or_down(direcao: str, valor_aposta: str = "0.00480") -> None:
             print(f"  [Simulação] Digitando valor da aposta: {valor_aposta}")
         encontrar_e_clicar_com_mss("./imgs/confirm.png", threshold=0.7)
         time.sleep(3)
-        encontrar_qualquer_imagem(["./imgs/metamask_confirm1.png", "./imgs/metamask_confirm2.png"], threshold=0.9)
+        encontrar_qualquer_imagem(["./imgs/metamask_confirm1.png", "./imgs/metamask_confirm2.png","./imgs/metamask_confirm3.png"], threshold=0.9)
         time.sleep(2)
         encontrar_qualquer_imagem(["./imgs/metamask_close2.png"], threshold=0.7)
         print(f"[{time.strftime('%H:%M:%S')}] Ordem UP enviada com sucesso!")
@@ -127,7 +127,7 @@ def up_or_down(direcao: str, valor_aposta: str = "0.00480") -> None:
             print(f"  [Simulação] Digitando valor da aposta: {valor_aposta}")
         encontrar_e_clicar_com_mss("./imgs/confirm.png", threshold=0.7)
         time.sleep(3)
-        encontrar_qualquer_imagem(["./imgs/metamask_confirm1.png", "./imgs/metamask_confirm2.png"], threshold=0.9)
+        encontrar_qualquer_imagem(["./imgs/metamask_confirm1.png", "./imgs/metamask_confirm2.png","./imgs/metamask_confirm3.png"], threshold=0.9)
         time.sleep(2)
         encontrar_qualquer_imagem(["./imgs/metamask_close2.png"], threshold=0.7)
         print(f"[{time.strftime('%H:%M:%S')}] Ordem DOWN enviada com sucesso!")
@@ -162,9 +162,11 @@ class PancakeFlyDeckBridge:
         confidence_threshold: float = 0.15,
         valor_aposta: str = "0.00480",
         max_execucoes_por_hora: int = 3,
+        lead_time_seconds: float = 25.0,
     ) -> None:
         self.valor_aposta = valor_aposta
         self.max_execucoes_por_hora = max_execucoes_por_hora
+        self.lead_time_seconds = lead_time_seconds
         self.historico_execucoes: dict[str, int] = {}
 
         print("[FlyDeck Bridge] Inicializando o circuito visual MaleCNS v1.0...")
@@ -182,11 +184,12 @@ class PancakeFlyDeckBridge:
             interval="5m",
             checkpoint_file="data/checkpoints/live_fly_brain.json",
             diagnostics_file="data/logs/live_diagnostics.jsonl",
+            lead_time_seconds=self.lead_time_seconds,
             on_action=self.ao_receber_previsao,
         )
 
     def ao_receber_previsao(self, action: str, record: dict[str, Any]) -> None:
-        """Callback acionado automaticamente a cada 5 minutos ao fechar o candle."""
+        """Callback acionado automaticamente a cada 5 minutos (T - lead_time) antes do lock."""
         hora_atual = time.strftime("%H", time.localtime())
         if hora_atual not in self.historico_execucoes:
             self.historico_execucoes[hora_atual] = 0
@@ -212,7 +215,7 @@ class PancakeFlyDeckBridge:
 
     def iniciar(self) -> None:
         """Inicia a execução contínua sincronizada com a Binance."""
-        print("\n[FlyDeck Bridge] Iniciando daemon sincronizado com candles de 5m...")
+        print(f"\n[FlyDeck Bridge] Iniciando daemon (antecedência: {self.lead_time_seconds:.0f}s antes do lock)...")
         self.daemon.run()
 
 
@@ -222,11 +225,22 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PancakeSwap Live Prediction Executor (FlyDeck Agent)")
     parser.add_argument("--circuit", default="data/malecns/motion_visual.json", help="Caminho para o circuito MaleCNS JSON")
     parser.add_argument("--confidence", type=float, default=0.15, help="Limiar de confiança base do FlyDeck")
-    parser.add_argument("--stake", default="0.00480", help="Valor em BNB por aposta (ex: 0.00480)")
+    parser.add_argument("--stake", default="0.00120", help="Valor em BNB por aposta (ex: 0.00480)")
     parser.add_argument("--max-hourly", type=int, default=6, help="Máximo de operações permitidas por hora")
+    parser.add_argument("--lead-time", type=float, default=25.0, help="Segundos de antecedência antes da virada do candle (padrão: 25.0s)")
     parser.add_argument("--open-browser", action="store_true", help="Abre o navegador na URL do PancakeSwap ao iniciar")
     parser.add_argument("--login", action="store_true", help="Tenta logar a MetaMask ao iniciar")
+    parser.add_argument("--test-image", type=str, default=None, help="Testa detecção e clique em uma imagem específica (ex: up.png)")
+    parser.add_argument("--test-scan", action="store_true", help="Escaneia a tela atual e exibe a confiança de todas as imagens")
     args = parser.parse_args()
+
+    if args.test_scan or args.test_image:
+        from test_image_click import escanear_tela, testar_clique_imagem
+        if args.test_scan:
+            escanear_tela()
+        elif args.test_image:
+            testar_clique_imagem(args.test_image, dry_run=False)
+        sys.exit(0)
 
     if args.open_browser:
         print("[Início] Abrindo o navegador...")
@@ -241,5 +255,6 @@ if __name__ == "__main__":
         confidence_threshold=args.confidence,
         valor_aposta=args.stake,
         max_execucoes_por_hora=args.max_hourly,
+        lead_time_seconds=args.lead_time,
     )
     bridge.iniciar()

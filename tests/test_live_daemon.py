@@ -64,6 +64,20 @@ def test_daemon_time_to_next_boundary() -> None:
     assert abs(wait_time - (200.0 + 2.0)) < 1e-3
 
 
+def test_daemon_lead_time_calculation() -> None:
+    circuit = _toy_circuit()
+    agent = FlyVisualPredictionAgent(circuit, retina_width=8, retina_height=4)
+    daemon = FlyDeckLiveDaemon(agent, interval_seconds=300, lead_time_seconds=25.0)
+
+    # If current time is 100s into 300s window, next trigger is at 300 - 25 = 275s -> wait 175s
+    wait_time = daemon.time_to_next_boundary(current_time=100.0)
+    assert abs(wait_time - 175.0) < 1e-3
+
+    # If current time is 280s (already past 275s for the 300s boundary), target is 600 - 25 = 575s -> wait 295s
+    wait_time_late = daemon.time_to_next_boundary(current_time=280.0)
+    assert abs(wait_time_late - 295.0) < 1e-3
+
+
 def test_daemon_step_execution_and_checkpointing(tmp_path: Path) -> None:
     circuit = _toy_circuit()
     agent = FlyVisualPredictionAgent(circuit, retina_width=8, retina_height=4)

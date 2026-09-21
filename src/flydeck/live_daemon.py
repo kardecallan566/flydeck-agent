@@ -37,11 +37,13 @@ class FlyDeckLiveDaemon:
         context_window: int = 32,
         service: MarketDataService | None = None,
         on_action: Callable[[str, dict[str, Any]], None] | None = None,
+        lead_time_seconds: float = 0.0,
     ) -> None:
         self.agent = agent
         self.symbol = symbol.upper()
         self.interval = interval
         self.interval_seconds = interval_seconds
+        self.lead_time_seconds = lead_time_seconds
         self.checkpoint_file = Path(checkpoint_file)
         self.diagnostics_file = Path(diagnostics_file)
         self.context_window = context_window
@@ -67,10 +69,26 @@ class FlyDeckLiveDaemon:
         self.running = False
 
     def time_to_next_boundary(self, current_time: float | None = None, buffer_seconds: float = 2.5) -> float:
-        """Calculate wait seconds until the next 5-minute candle close."""
+        """Calculate wait seconds until the next evaluation trigger.
+
+        If lead_time_seconds > 0, triggers lead_time_seconds BEFORE the candle close
+        (e.g., at T - 25s so orders can be placed before round lock on PancakeSwap).
+        Otherwise, triggers buffer_seconds AFTER the candle close.
+        """
         now = current_time if current_time is not None else time.time()
-        next_boundary = (int(now // self.interval_seconds) + 1) * self.interval_seconds
-        return max(0.5, (next_boundary - now) + buffer_seconds)
+        current_block = int(now // self.interval_seconds)
+        next_boundary = (current_block + 1) * self.interval_seconds
+
+        if self.lead_time_seconds > 0:
+            target_time = next_boundary - self.lead_time_seconds
+            if now >= target_time:
+                target_time = next_boundary + self.interval_seconds - self.lead_time_seconds
+            return max(0.5, target_time - now)
+        else:
+            target_time = next_boundary + buffer_seconds
+            if now >= target_time:
+                target_time = next_boundary + self.interval_seconds + buffer_seconds
+            return max(0.5, target_time - now)
 
     def execute_step(self, current_time: float | None = None) -> dict[str, Any] | None:
         """Execute one evaluation round upon candle close."""
@@ -203,6 +221,7 @@ def main() -> None:
     parser.add_argument("--checkpoint", default="data/checkpoints/live_fly_brain.json", help="Checkpoint file path")
     parser.add_argument("--logs", default="data/logs/live_diagnostics.jsonl", help="Diagnostics log path")
     parser.add_argument("--confidence", default=0.15, type=float, help="Base confidence threshold")
+    parser.add_argument("--lead-time", default=0.0, type=float, help="Advance lead time in seconds before candle close (e.g. 25.0)")
     parser.add_argument("--max-rounds", type=int, default=None, help="Stop after N rounds (default: run forever)")
     args = parser.parse_args()
 
@@ -220,6 +239,7 @@ def main() -> None:
         interval=args.interval,
         checkpoint_file=args.checkpoint,
         diagnostics_file=args.logs,
+        lead_time_seconds=args.lead_time,
     )
 
     daemon.run(max_rounds=args.max_rounds)
