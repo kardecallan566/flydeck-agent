@@ -36,6 +36,7 @@ class FlyDeckLiveDaemon:
         diagnostics_file: str | Path = "data/logs/live_diagnostics.jsonl",
         context_window: int = 32,
         service: MarketDataService | None = None,
+        on_action: Callable[[str, dict[str, Any]], None] | None = None,
     ) -> None:
         self.agent = agent
         self.symbol = symbol.upper()
@@ -45,6 +46,7 @@ class FlyDeckLiveDaemon:
         self.diagnostics_file = Path(diagnostics_file)
         self.context_window = context_window
         self.service = service or MarketDataService(BinanceMarketDataProvider())
+        self.on_action = on_action
 
         self.running = False
         self.round_count = 0
@@ -145,6 +147,14 @@ class FlyDeckLiveDaemon:
             f"Conflict: {record['conflict']:<5.2f} | MB Val: {record['mb_valence']:<6.2f} | "
             f"Prev Ret: {prev_ret_str} -> Checkpoint Saved"
         )
+
+        # 8. Trigger external execution hook if registered
+        if self.on_action is not None:
+            try:
+                self.on_action(record["action"], record)
+            except Exception as e:
+                print(f"[FlyDeck Daemon] Erro no callback de ação (on_action): {e}")
+
         return record
 
     def run(self, max_rounds: int | None = None) -> None:

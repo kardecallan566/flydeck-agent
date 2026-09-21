@@ -92,3 +92,28 @@ def test_daemon_step_execution_and_checkpointing(tmp_path: Path) -> None:
     # Second call with same latest timestamp should return None (deduplication)
     duplicate = daemon.execute_step()
     assert duplicate is None
+
+
+def test_daemon_triggers_on_action_callback(tmp_path: Path) -> None:
+    circuit = _toy_circuit()
+    agent = FlyVisualPredictionAgent(circuit, retina_width=8, retina_height=4)
+    mock_prov = MockProvider(candle_count=40)
+    service = MarketDataService(mock_prov, cache_root=tmp_path / "cache")
+
+    received_actions = []
+
+    def handle_action(action: str, record: dict) -> None:
+        received_actions.append((action, record["close"]))
+
+    daemon = FlyDeckLiveDaemon(
+        agent=agent,
+        context_window=10,
+        checkpoint_file=tmp_path / "ckpt.json",
+        diagnostics_file=tmp_path / "diag.jsonl",
+        service=service,
+        on_action=handle_action,
+    )
+
+    record = daemon.execute_step()
+    assert len(received_actions) == 1
+    assert received_actions[0][0] in ("UP", "DOWN", "WAIT")
