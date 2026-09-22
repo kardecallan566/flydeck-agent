@@ -454,7 +454,9 @@ class MaleCNSVisualSystem:
         )
         self.last_cx_state = cx_state
 
-        # 6. Mushroom Body Sparse Associative Memory
+        # 6. Mushroom Body Sparse Associative Memory (Zero-Centered Symmetric Context)
+        norm_coherence = (coherence - 0.5) * 2.0
+        norm_volatility = min(1.0, max(-1.0, (volatility - 0.0035) * 200.0))
         context_vector = (
             lptc_signal,
             retina_vel_signal,
@@ -462,8 +464,8 @@ class MaleCNSVisualSystem:
             cx_state.attractor_heading,
             cx_state.fast_bias,
             cx_state.slow_bias,
-            volatility,
-            coherence,
+            norm_volatility,
+            norm_coherence,
         )
         mb_out = self.mushroom_body.perceive(context_vector)
         self.last_mb_out = mb_out

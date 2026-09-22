@@ -59,6 +59,14 @@ from flydeck.visual_agent import FlyVisualPredictionAgent
 from flydeck.visual_circuit import VisualCircuit
 
 
+# ==============================================================================
+# CONFIGURAÇÃO DE EXECUÇÃO:
+# - True:  MODO REAL (executa cliques e ordens no site do PancakeSwap)
+# - False: MODO TREINO (prevê, aprende, atualiza checkpoints, SEM clicar no site)
+# ==============================================================================
+EXECUTAR_NO_PANCAKESWAP = True
+
+
 CSV_LOG_FILE = "testes_flydeck_pancake.csv"
 
 
@@ -163,10 +171,12 @@ class PancakeFlyDeckBridge:
         valor_aposta: str = "0.00480",
         max_execucoes_por_hora: int = 3,
         lead_time_seconds: float = 25.0,
+        executar_pancake: bool = EXECUTAR_NO_PANCAKESWAP,
     ) -> None:
         self.valor_aposta = valor_aposta
         self.max_execucoes_por_hora = max_execucoes_por_hora
         self.lead_time_seconds = lead_time_seconds
+        self.executar_pancake = executar_pancake
         self.historico_execucoes: dict[str, int] = {}
 
         print("[FlyDeck Bridge] Inicializando o circuito visual MaleCNS v1.0...")
@@ -208,14 +218,20 @@ class PancakeFlyDeckBridge:
             print(f"   Valência MB: {record['mb_valence']:.2f} | Conflito: {record['conflict']:.2f}")
             print(f"=======================================================")
 
-            up_or_down(action, valor_aposta=self.valor_aposta)
+            if self.executar_pancake:
+                up_or_down(action, valor_aposta=self.valor_aposta)
+            else:
+                print(f"[{time.strftime('%H:%M:%S')}] 🧪 [MODO TREINO] Ordem {action} registrada (nenhuma ação enviada ao site).")
+
             self.historico_execucoes[hora_atual] += 1
         else:
             print(f"[{time.strftime('%H:%M:%S')}] Agente optou por WAIT ({record['reason']}) | Conflito: {record['conflict']:.2f}")
 
     def iniciar(self) -> None:
         """Inicia a execução contínua sincronizada com a Binance."""
-        print(f"\n[FlyDeck Bridge] Iniciando daemon (antecedência: {self.lead_time_seconds:.0f}s antes do lock)...")
+        modo_str = "🟢 MODO REAL (Ordens enviadas ao PancakeSwap)" if self.executar_pancake else "🧪 MODO TREINO / SIMULAÇÃO (Sem cliques no site)"
+        print(f"\n[FlyDeck Bridge] Status: {modo_str}")
+        print(f"[FlyDeck Bridge] Iniciando daemon (antecedência: {self.lead_time_seconds:.0f}s antes do lock)...")
         self.daemon.run()
 
 
@@ -225,9 +241,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PancakeSwap Live Prediction Executor (FlyDeck Agent)")
     parser.add_argument("--circuit", default="data/malecns/motion_visual.json", help="Caminho para o circuito MaleCNS JSON")
     parser.add_argument("--confidence", type=float, default=0.15, help="Limiar de confiança base do FlyDeck")
-    parser.add_argument("--stake", default="0.00120", help="Valor em BNB por aposta (ex: 0.00480)")
+    parser.add_argument("--stake", default="0.00480", help="Valor em BNB por aposta (ex: 0.00480)")
     parser.add_argument("--max-hourly", type=int, default=6, help="Máximo de operações permitidas por hora")
     parser.add_argument("--lead-time", type=float, default=25.0, help="Segundos de antecedência antes da virada do candle (padrão: 25.0s)")
+    parser.add_argument("--treino", "--simular", dest="treino", action="store_true", help="Ativa modo treino: prevê e aprende sem clicar no PancakeSwap")
+    parser.add_argument("--real", dest="real", action="store_true", help="Força modo real com apostas no PancakeSwap")
     parser.add_argument("--open-browser", action="store_true", help="Abre o navegador na URL do PancakeSwap ao iniciar")
     parser.add_argument("--login", action="store_true", help="Tenta logar a MetaMask ao iniciar")
     parser.add_argument("--test-image", type=str, default=None, help="Testa detecção e clique em uma imagem específica (ex: up.png)")
@@ -242,13 +260,27 @@ if __name__ == "__main__":
             testar_clique_imagem(args.test_image, dry_run=False)
         sys.exit(0)
 
-    if args.open_browser:
-        print("[Início] Abrindo o navegador...")
-        abrir_navegador("https://pancakeswap.finance/prediction?token=BNB")
-        time.sleep(4)
+    # Determina o modo de execução: CLI tem precedência sobre a variável do arquivo
+    executar_no_site = EXECUTAR_NO_PANCAKESWAP
+    if args.treino:
+        executar_no_site = False
+    elif args.real:
+        executar_no_site = True
 
-    if args.login:
-        logar_navegador()
+    if executar_no_site:
+        if args.open_browser:
+            print("[Início] Abrindo o navegador...")
+            abrir_navegador("https://pancakeswap.finance/prediction?token=BNB")
+            time.sleep(4)
+
+        if args.login:
+            logar_navegador()
+    else:
+        print("\n" + "=" * 65)
+        print("🧪 [MODO TREINO ATIVADO]")
+        print("O agente irá executar 24/7, realizar previsões, treinar o Mushroom Body,")
+        print("salvar checkpoints e registrar logs no CSV, mas NÃO interagirá com o site.")
+        print("=" * 65)
 
     bridge = PancakeFlyDeckBridge(
         circuit_path=args.circuit,
@@ -256,5 +288,6 @@ if __name__ == "__main__":
         valor_aposta=args.stake,
         max_execucoes_por_hora=args.max_hourly,
         lead_time_seconds=args.lead_time,
+        executar_pancake=executar_no_site,
     )
     bridge.iniciar()

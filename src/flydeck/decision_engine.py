@@ -78,13 +78,21 @@ class DynamicDecisionEngine:
 
         streams = (lptc_ev, retina_ev, cx_ev, mb_ev)
 
+        # Sensory concordance: when bottom-up visual streams (LPTC motion and retina kinematics) strongly agree
+        sensory_agree = (lptc_ev * retina_ev) > 0.0 and min(abs(lptc_ev), abs(retina_ev)) > 0.10
+
         # 2. Conflict Calculation across distinct functional systems
         conflicts: list[float] = []
         for i in range(len(streams)):
             for j in range(i + 1, len(streams)):
                 s_i, s_j = streams[i], streams[j]
                 if (s_i > 0.08 and s_j < -0.08) or (s_i < -0.08 and s_j > 0.08):
-                    conflicts.append(abs(s_i - s_j))
+                    diff = abs(s_i - s_j)
+                    # Bottom-Up Sensory Override: if visual sensory streams agree on real-time motion,
+                    # prior associative memory (stream 3: mb_ev) divergence does not paralyze the organism
+                    if sensory_agree and (i == 3 or j == 3):
+                        diff *= 0.40
+                    conflicts.append(diff)
         conflict_val = sum(conflicts) / len(conflicts) if conflicts else 0.0
 
         # 3. Hypothesis Probability Extraction
@@ -202,24 +210,11 @@ class DynamicDecisionEngine:
                 temporal_consistency=temporal_consistency,
             )
 
-        # Sufficient confidence & acceptable conflict: commit
+        # Sufficient confidence & acceptable conflict: commit symmetrically
         if up_score > down_score:
             action = Prediction.UP
             reason = DecisionReason.COMMIT_UP
         else:
-            # Calibrate DOWN to avoid committing on noisy pullbacks
-            if p_down < 0.38 and confidence < (adaptive_thresh + 0.03):
-                return DecoupledDecision(
-                    action=Prediction.WAIT,
-                    reason=DecisionReason.WAIT_LOW_CONFIDENCE,
-                    up_score=up_score,
-                    down_score=down_score,
-                    confidence=confidence,
-                    wait=True,
-                    conflict=conflict_val,
-                    uncertainty=state.uncertainty,
-                    temporal_consistency=temporal_consistency,
-                )
             action = Prediction.DOWN
             reason = DecisionReason.COMMIT_DOWN
 
