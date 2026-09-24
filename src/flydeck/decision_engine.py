@@ -75,6 +75,7 @@ class DynamicDecisionEngine:
         retina_ev = state.retina_velocity + 0.30 * state.retina_acceleration
         cx_ev = state.cx_heading
         mb_ev = state.mb_valence
+        mb_wait_q, mb_up_q, mb_down_q = state.mb_action_values
 
         streams = (lptc_ev, retina_ev, cx_ev, mb_ev)
 
@@ -123,9 +124,13 @@ class DynamicDecisionEngine:
             + 0.20 * cx_ev
             + 0.20 * mb_ev
         )
-        up_score = max(0.0, combined_signal)
-        down_score = max(0.0, -combined_signal)
-        confidence = abs(combined_signal)
+        # The associative readouts are action-specific. Blend them with the
+        # causal sensory evidence; otherwise MBON_UP/DOWN/WAIT would be
+        # trained but never reach the final behavioural decision.
+        up_score = max(0.0, 0.70 * combined_signal + 0.30 * mb_up_q)
+        down_score = max(0.0, 0.70 * (-combined_signal) + 0.30 * mb_down_q)
+        learned_wait = max(0.0, mb_wait_q)
+        confidence = max(up_score, down_score)
 
         # Dynamic adaptive threshold modulated by:
         # - Coherence
@@ -138,6 +143,7 @@ class DynamicDecisionEngine:
         adaptive_thresh += max(0.0, state.arousal - 0.20) * 0.12
         adaptive_thresh += conflict_val * 0.18
         adaptive_thresh += metabolic_modifier
+        adaptive_thresh += 0.10 * learned_wait
 
         # Bonus threshold relaxation if temporal consistency is very high
         if temporal_consistency >= 0.80 and confidence > 0.10:
@@ -198,6 +204,19 @@ class DynamicDecisionEngine:
             )
 
         if confidence < adaptive_thresh:
+            return DecoupledDecision(
+                action=Prediction.WAIT,
+                reason=DecisionReason.WAIT_LOW_CONFIDENCE,
+                up_score=up_score,
+                down_score=down_score,
+                confidence=confidence,
+                wait=True,
+                conflict=conflict_val,
+                uncertainty=state.uncertainty,
+                temporal_consistency=temporal_consistency,
+            )
+
+        if learned_wait > max(up_score, down_score) + 0.05:
             return DecoupledDecision(
                 action=Prediction.WAIT,
                 reason=DecisionReason.WAIT_LOW_CONFIDENCE,

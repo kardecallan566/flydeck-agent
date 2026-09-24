@@ -1,8 +1,10 @@
 import numpy as np
 
+from flydeck.decision_engine import DecisionReason, DynamicDecisionEngine
 from flydeck.mushroom_body import MushroomBodyAssociativeMemory
 from flydeck.visual_agent import FlyVisualPredictionAgent
 from flydeck.visual_circuit import VisualCircuit, VisualEdge, VisualNeuron
+from flydeck.internal_state import AgentInternalState
 
 
 def circuit() -> VisualCircuit:
@@ -35,10 +37,22 @@ def test_mushroom_body_updates_three_action_readouts() -> None:
     assert not np.array_equal(before[2], mb._action_weights_np[2])
 
 
-def test_visual_agent_can_freeze_learning() -> None:
+def test_decision_engine_uses_action_specific_mbon_values() -> None:
+    engine = DynamicDecisionEngine()
+    state = AgentInternalState(coherence=0.8, uncertainty=0.1, hypothesis_probs=(0.34, 0.33, 0.33))
+    state.mb_action_values = (0.0, 0.95, -0.95)
+    decision = engine.decide(state, minimum_confidence=0.10)
+    assert decision.action.name == "UP"
+    assert decision.reason == DecisionReason.COMMIT_UP
+
+
+def test_visual_agent_can_freeze_learning_and_reset_transient_bias() -> None:
     agent = FlyVisualPredictionAgent(circuit(), retina_width=8, retina_height=6, confidence_threshold=0.0)
+    agent.visual.policy_bias = -0.15
     agent.perceive((100.0, 100.0, 100.5, 101.0, 101.5))
     agent.set_learning(False)
     before = agent.visual.mushroom_body._action_weights_np.copy()
+    agent.reset(preserve_learning=True)
+    assert agent.visual.policy_bias == 0.0
     agent.perceive((101.5, 101.0, 100.5, 100.0, 99.5))
     assert np.array_equal(before, agent.visual.mushroom_body._action_weights_np)

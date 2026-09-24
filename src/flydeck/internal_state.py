@@ -40,6 +40,7 @@ class AgentInternalState:
     # 4. Associative Memory (Mushroom Body)
     mb_valence: float = 0.0             # Learned associative valence from MBONs in [-1, +1]
     mb_novelty: float = 0.0             # Familiarity/novelty of current sparse KC representation
+    mb_action_values: tuple[float, float, float] = (0.0, 0.0, 0.0)  # WAIT, UP, DOWN
     policy_bias: float = 0.0            # Causal UP(+)/DOWN(-) homeostatic correction
 
     # 5. Predictive Coding & Expectation
@@ -82,6 +83,7 @@ class AgentInternalState:
             cx_heading=self.cx_heading,
             mb_valence=self.mb_valence,
             mb_novelty=self.mb_novelty,
+            mb_action_values=self.mb_action_values,
             policy_bias=self.policy_bias,
             expectation=self.expectation,
             prediction_error=self.prediction_error,
@@ -106,6 +108,9 @@ class AgentInternalState:
             "vs_net": self.vs_net,
             "cx_heading": self.cx_heading,
             "mb_valence": self.mb_valence,
+            "mb_wait_value": self.mb_action_values[0],
+            "mb_up_value": self.mb_action_values[1],
+            "mb_down_value": self.mb_action_values[2],
             "policy_bias": self.policy_bias,
             "expectation": self.expectation,
             "prediction_error": self.prediction_error,

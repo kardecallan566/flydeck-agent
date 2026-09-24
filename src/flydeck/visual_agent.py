@@ -181,7 +181,7 @@ class MaleCNSVisualSystem:
         # Positive bias favours UP and negative bias favours DOWN. It is
         # updated only after the next candle is observed, preventing leakage.
         self.policy_bias = 0.0
-        self.policy_bias_learning_rate = 0.08
+        self.policy_bias_learning_rate = 0.04
         self._previous_action_sign = 0
         self.learning_enabled = True
 
@@ -283,8 +283,10 @@ class MaleCNSVisualSystem:
         self.last_shock_state = None
         self.last_attention_state = None
         self._previous_price = None
-        if not preserve_learning:
-            self.policy_bias = 0.0
+        # policy_bias is a short-term homeostatic correction, not a learned
+        # context association. Never carry it across an episode/split; the
+        # action-specific MBON readouts are the persistent learning state.
+        self.policy_bias = 0.0
         self._previous_action_sign = 0
 
     def register_action(self, action: Prediction) -> None:
@@ -303,8 +305,8 @@ class MaleCNSVisualSystem:
         outcome_sign = 1 if observed_return_pct > 0 else -1
         error = outcome_sign - self._previous_action_sign
         self.policy_bias = max(
-            -0.50,
-            min(0.50, self.policy_bias + self.policy_bias_learning_rate * error),
+            -0.15,
+            min(0.15, self.policy_bias + self.policy_bias_learning_rate * error),
         )
 
     def step(self, stimulus: RetinaStimulus, current_price: float | None = None) -> tuple[float, ...]:
@@ -532,6 +534,7 @@ class MaleCNSVisualSystem:
         st.cx_heading = cx_state.attractor_heading
         st.mb_valence = mb_out.valence
         st.mb_novelty = mb_out.novelty
+        st.mb_action_values = mb_out.action_values
         st.expectation = pred_update.expectation
         st.prediction_error = pred_update.prediction_error
         st.signed_error = pred_update.signed_error
