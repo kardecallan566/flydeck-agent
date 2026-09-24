@@ -34,8 +34,11 @@ def main() -> int:
         print(f"deaths: {result.deaths}")
         print(f"lives remaining: {result.lives_remaining}")
         print(f"correct/entered: {result.correct}/{result.entered}")
+        print(f"accuracy: {result.correct / result.entered:.3%}" if result.entered else "accuracy: N/A")
+        print(f"coverage: {result.entered / result.rounds:.3%}" if result.rounds else "coverage: N/A")
         print(f"UP/DOWN/WAIT: {result.up}/{result.down}/{result.wait}")
-        print(f"survival rate: {result.survival_rate:.3%}")
+        print(f"death rate per round: {result.deaths / result.rounds:.3%}" if result.rounds else "death rate per round: N/A")
+        print("survival rate: deprecated; use accuracy, coverage and death rate per round")
         return 0
     train, validation, test = run_visual_benchmark(data, circuit)
     print(f"visual neurons: {len(circuit.neurons)}")
