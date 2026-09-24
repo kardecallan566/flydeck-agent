@@ -454,16 +454,19 @@ class MaleCNSVisualSystem:
         )
         self.last_cx_state = cx_state
 
-        # 6. Mushroom Body Sparse Associative Memory (Zero-Centered Symmetric Context)
+        # 6. Mushroom Body Sparse Associative Memory (Decoupled Objective Market Context)
         norm_coherence = (coherence - 0.5) * 2.0
         norm_volatility = min(1.0, max(-1.0, (volatility - 0.0035) * 200.0))
+        norm_volume = min(1.0, max(-1.0, (self.last_stimulus.volume_contrast - 1.0) if self.last_stimulus else 0.0))
+        norm_acceleration = min(1.0, max(-1.0, acceleration * 2.0))
+        norm_short_vel = min(1.0, max(-1.0, short_velocity))
         context_vector = (
             lptc_signal,
             retina_vel_signal,
             balance_signal,
-            cx_state.attractor_heading,
-            cx_state.fast_bias,
-            cx_state.slow_bias,
+            norm_acceleration,
+            norm_short_vel,
+            norm_volume,
             norm_volatility,
             norm_coherence,
         )

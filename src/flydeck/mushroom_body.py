@@ -115,9 +115,9 @@ class MushroomBodyAssociativeMemory:
             top_k_indices = np.argpartition(kc_potentials, -self.k_active)[-self.k_active:]
             active_kcs = tuple(int(idx) for idx in top_k_indices)
 
-            # 3. Readout via MBON synaptic weights
-            valence_sum = float(np.sum(self._mbon_weights_np[top_k_indices]))
-            valence = math.tanh(valence_sum)
+            # 3. Readout via MBON synaptic weights (normalized by active KC count)
+            valence_mean = float(np.mean(self._mbon_weights_np[top_k_indices]))
+            valence = math.tanh(valence_mean * 2.5)
 
             # 4. Novelty calculation: fraction of currently active KCs that have seen < 2 lifetime activations
             novel_count = float(np.sum(self._kc_history_np[top_k_indices] < 2.0))
@@ -154,11 +154,14 @@ class MushroomBodyAssociativeMemory:
         dopamine_signal = math.tanh(observed_return * 20.0)
 
         if np is not None and self._mbon_weights_np is not None:
-            # Weight decay across active units (forgetting / homeostatic scaling)
-            self._mbon_weights_np[list(active)] *= (1.0 - self.weight_decay)
-            # Associative LTP / LTD: delta W = eta * DA
+            # 1. Global continuous baseline decay across ALL Kenyon Cells (forgetting old stale biases)
+            self._mbon_weights_np *= (1.0 - self.weight_decay)
+            # 2. Associative LTP / LTD on active Kenyon Cells: delta W = eta * DA
             self._mbon_weights_np[list(active)] += self.learning_rate * dopamine_signal
-            # Homeostatic synaptic downscaling (preserves relative contrast, prevents saturation)
+            # 3. Zero-centering regularization to prevent systemic directional drift / latching
+            mean_weight = float(np.mean(self._mbon_weights_np))
+            self._mbon_weights_np -= 0.15 * mean_weight
+            # 4. Homeostatic synaptic downscaling (preserves relative contrast, bounds maximum norm)
             norm = float(np.linalg.norm(self._mbon_weights_np))
             if norm > self.homeostatic_target_norm:
                 self._mbon_weights_np *= (self.homeostatic_target_norm / norm)

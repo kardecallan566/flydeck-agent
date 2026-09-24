@@ -116,12 +116,12 @@ class DynamicDecisionEngine:
             temporal_consistency = 1.0
 
         # 5. Continuous Confidence & Score Formation
-        # Combined evidence weighted by consensus
+        # Combined evidence weighted with sensory primacy (75% visual reality, 25% internal context)
         combined_signal = (
-            0.35 * lptc_ev
-            + 0.25 * retina_ev
-            + 0.20 * cx_ev
-            + 0.20 * mb_ev
+            0.45 * lptc_ev
+            + 0.30 * retina_ev
+            + 0.15 * cx_ev
+            + 0.10 * mb_ev
         )
         up_score = max(0.0, combined_signal)
         down_score = max(0.0, -combined_signal)

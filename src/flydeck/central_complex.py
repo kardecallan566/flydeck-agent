@@ -114,7 +114,7 @@ class CentralComplexSystem:
         # 4. Ring Attractor Heading (Persistent Working Memory + MB Feedback)
         base_heading = 0.65 * self._fast_bias + 0.35 * self._slow_bias
         if mb_feedback != 0.0:
-            target_heading = 0.85 * base_heading + 0.15 * mb_feedback
+            target_heading = 0.90 * base_heading + 0.10 * mb_feedback
         else:
             target_heading = base_heading
         self._attractor_heading = (1.0 - self.attractor_leak) * self._attractor_heading + self.attractor_leak * target_heading

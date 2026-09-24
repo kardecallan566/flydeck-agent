@@ -83,9 +83,9 @@ class PredictiveCodingEngine:
         dopamine_burst = max(0.0, min(1.0, (prediction_error - self.surprise_threshold) * 2.0))
 
         # 2. Update hypothesis competition:
-        # Evidence: observed_motion, cx_context, mb_valence
-        ev_up = max(0.0, observed_motion) * 0.45 + max(0.0, cx_context) * 0.35 + max(0.0, mb_valence) * 0.20
-        ev_down = max(0.0, -observed_motion) * 0.45 + max(0.0, -cx_context) * 0.35 + max(0.0, -mb_valence) * 0.20
+        # Evidence: observed_motion (sensory: 60%), cx_context (heading: 25%), mb_valence (associative memory: 15%)
+        ev_up = max(0.0, observed_motion) * 0.60 + max(0.0, cx_context) * 0.25 + max(0.0, mb_valence) * 0.15
+        ev_down = max(0.0, -observed_motion) * 0.60 + max(0.0, -cx_context) * 0.25 + max(0.0, -mb_valence) * 0.15
         # Neutral / chop evidence: low net motion or conflicting signals
         ev_neutral = max(0.0, 1.0 - (abs(observed_motion) + abs(cx_context)) * 0.5)
 
