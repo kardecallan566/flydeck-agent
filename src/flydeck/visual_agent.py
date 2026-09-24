@@ -178,6 +178,11 @@ class MaleCNSVisualSystem:
 
         # Previous step price for causal reinforcement
         self._previous_price: float | None = None
+        # Positive bias favours UP and negative bias favours DOWN. It is
+        # updated only after the next candle is observed, preventing leakage.
+        self.policy_bias = 0.0
+        self.policy_bias_learning_rate = 0.08
+        self._previous_action_sign = 0
 
         # Normalize incoming synapse mass
         incoming = [0.0] * len(circuit.neurons)
@@ -243,7 +248,7 @@ class MaleCNSVisualSystem:
         self.previous_on_field: tuple[tuple[float, ...], ...] | None = None
         self.previous_off_field: tuple[tuple[float, ...], ...] | None = None
 
-    def reset(self) -> None:
+    def reset(self, preserve_learning: bool = False) -> None:
         self.state = [0.0] * len(self.state)
         self.filtered_state = [0.0] * len(self.state)
         self.trend_bias = 0.0
@@ -261,7 +266,7 @@ class MaleCNSVisualSystem:
         self.synaptic_adaptation.reset()
         self.lptc.reset()
         self.central_complex.reset()
-        self.mushroom_body.reset()
+        self.mushroom_body.reset(preserve_weights=preserve_learning)
         self.predictive_coding.reset()
         self.decision_engine.reset()
         self.attention.reset()
@@ -277,12 +282,32 @@ class MaleCNSVisualSystem:
         self.last_shock_state = None
         self.last_attention_state = None
         self._previous_price = None
+        if not preserve_learning:
+            self.policy_bias = 0.0
+        self._previous_action_sign = 0
+
+    def register_action(self, action: Prediction) -> None:
+        """Remember the committed direction for the next causal reward."""
+        self._previous_action_sign = (
+            1 if action == Prediction.UP else -1 if action == Prediction.DOWN else 0
+        )
+
+    def _update_policy_bias(self, observed_return_pct: float) -> None:
+        if self._previous_action_sign == 0 or abs(observed_return_pct) < 1e-12:
+            return
+        outcome_sign = 1 if observed_return_pct > 0 else -1
+        error = outcome_sign - self._previous_action_sign
+        self.policy_bias = max(
+            -0.50,
+            min(0.50, self.policy_bias + self.policy_bias_learning_rate * error),
+        )
 
     def step(self, stimulus: RetinaStimulus, current_price: float | None = None) -> tuple[float, ...]:
         # 1. Causal Reinforcement & Shock Detection from prior step
         observed_ret = 0.0
         if current_price is not None and self._previous_price is not None:
             observed_ret = (current_price / self._previous_price - 1.0) * 100.0
+            self._update_policy_bias(observed_ret)
             self.mushroom_body.reinforce(observed_ret)
             self.metabolic_control.update_feedback(observed_ret)
         if current_price is not None:
@@ -426,6 +451,7 @@ class MaleCNSVisualSystem:
             lptc_signal = (dir_up - dir_down) / dir_tot if dir_tot > 1e-12 else 0.0
         else:
             lptc_signal = self.last_lptc_out.vs_net if self.last_lptc_out else 0.0
+            lptc_signal = max(-1.0, min(1.0, lptc_signal + self.policy_bias))
 
         # 3. Kinematics Stream (Retina velocity and acceleration)
         velocity = self.last_stimulus.velocity if self.last_stimulus else 0.0
@@ -485,6 +511,7 @@ class MaleCNSVisualSystem:
 
         # 9. Synthesize Continuous Internal State
         st.perceptual_balance = balance_signal
+        st.policy_bias = self.policy_bias
         st.retina_velocity = retina_vel_signal
         st.retina_acceleration = acceleration
         st.volume_contrast = self.last_stimulus.volume_contrast if self.last_stimulus else 1.0
@@ -611,8 +638,8 @@ class FlyVisualPredictionAgent:
         )
         self.confidence_threshold = confidence_threshold
 
-    def reset(self) -> None:
-        self.visual.reset()
+    def reset(self, preserve_learning: bool = False) -> None:
+        self.visual.reset(preserve_learning=preserve_learning)
 
     def perceive(
         self,
@@ -622,7 +649,9 @@ class FlyVisualPredictionAgent:
         current_price = prices[-1] if prices else None
         stimulus = self.retina.encode(prices, volumes=volumes)
         self.visual.step(stimulus, current_price=current_price)
-        return stimulus, self.visual.decision(self.confidence_threshold)
+        decision = self.visual.decision(self.confidence_threshold)
+        self.visual.register_action(decision.action)
+        return stimulus, decision
 
     @property
     def internal_state(self) -> AgentInternalState:

@@ -78,13 +78,23 @@ class MushroomBodyAssociativeMemory:
         # Eligibility trace for causal t -> t+1 reinforcement learning
         self._pending_active_kcs: tuple[int, ...] | None = None
 
-    def reset(self) -> None:
-        """Reset internal states and memory traces."""
-        if np is not None and self._mbon_weights_np is not None:
-            self._mbon_weights_np.fill(0.0)
+    def reset(self, preserve_weights: bool = False) -> None:
+        """Reset traces, optionally keeping learned MBON associations.
+
+        A survival-training death is an episode boundary, not permission to
+        erase the experience that caused the next life to exist. The legacy
+        full reset remains the default for evaluation isolation.
+        """
+        if not preserve_weights:
+            if np is not None and self._mbon_weights_np is not None:
+                self._mbon_weights_np.fill(0.0)
+                self._kc_history_np.fill(0.0)
+            else:
+                self._mbon_weights_np = [0.0] * self.kc_count
+                self._kc_history_list = [0.0] * self.kc_count
+        elif np is not None and self._kc_history_np is not None:
             self._kc_history_np.fill(0.0)
         else:
-            self._mbon_weights_np = [0.0] * self.kc_count
             self._kc_history_list = [0.0] * self.kc_count
         self._pending_active_kcs = None
 
