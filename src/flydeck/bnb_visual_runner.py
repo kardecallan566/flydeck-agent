@@ -34,9 +34,10 @@ def run_visual_benchmark(
     validation_end = train_end + int(usable * 0.15)
     agent = FlyVisualPredictionAgent(circuit, retina_width=context)
     train = _split(agent, data, context - 1, train_end, context)
-    agent.reset()
+    agent.set_learning(False)
+    agent.reset(preserve_learning=True)
     validation = _split(agent, data, train_end, validation_end, context)
-    agent.reset()
+    agent.reset(preserve_learning=True)
     test = _split(agent, data, validation_end, usable, context)
     return train, validation, test
 
@@ -51,7 +52,8 @@ def _split(
     entered = correct = up = down = wait = 0
     for index in range(start, end):
         prices = data.closes[max(0, index - context + 1) : index + 1]
-        _stimulus, decision = agent.perceive(prices)
+        volumes = data.volumes[max(0, index - context + 1) : index + 1]
+        _stimulus, decision = agent.perceive(prices, volumes=volumes)
         outcome = data.outcome(index)
         if decision.wait:
             wait += 1

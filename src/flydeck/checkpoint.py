@@ -42,11 +42,13 @@ class AgentCheckpointManager:
         pc = vis.predictive_coding
 
         # Extract MBON synaptic weights and KC history
-        if np is not None and mb._mbon_weights_np is not None:
+        if np is not None and hasattr(mb, "_action_weights_np"):
+            action_weights = mb._action_weights_np.tolist()
             mbon_weights = mb._mbon_weights_np.tolist()
             kc_history = mb._kc_history_np.tolist()
         else:
             mbon_weights = list(mb._mbon_weights_np)
+            action_weights = getattr(mb, "_action_weights_list", None)
             kc_history = list(getattr(mb, "_kc_history_list", []))
 
         state_dict = vis.internal_state.to_diagnostic_dict()
@@ -56,6 +58,7 @@ class AgentCheckpointManager:
             "metadata": metadata or {},
             "mushroom_body": {
                 "mbon_weights": mbon_weights,
+                "action_weights": action_weights,
                 "kc_history": kc_history,
                 "enabled": mb.enabled,
             },
@@ -113,12 +116,26 @@ class AgentCheckpointManager:
 
         # Restore Mushroom Body
         mb_data = payload.get("mushroom_body", {})
-        if "mbon_weights" in mb_data:
-            w = mb_data["mbon_weights"]
-            if np is not None and mb._mbon_weights_np is not None:
-                mb._mbon_weights_np = np.array(w, dtype=np.float32)
+        if "action_weights" in mb_data and mb_data["action_weights"] is not None:
+            w = mb_data["action_weights"]
+            if np is not None and hasattr(mb, "_action_weights_np"):
+                mb._action_weights_np = np.array(w, dtype=np.float32)
             else:
+                mb._action_weights_list = [list(row) for row in w]
+        elif "mbon_weights" in mb_data:
+            w = mb_data["mbon_weights"]
+            if np is not None and hasattr(mb, "_action_weights_np"):
+                legacy = np.array(w, dtype=np.float32)
+                mb._action_weights_np[1] = np.maximum(legacy, 0.0)
+                mb._action_weights_np[2] = np.minimum(legacy, 0.0)
+                mb._mbon_weights_np = legacy
+            else:
+                mb._action_weights_list[1] = [max(value, 0.0) for value in w]
+                mb._action_weights_list[2] = [min(value, 0.0) for value in w]
                 mb._mbon_weights_np = list(w)
+        if "action_weights" in mb_data and mb_data["action_weights"] is not None and "mbon_weights" in mb_data:
+            if np is not None and hasattr(mb, "_action_weights_np"):
+                mb._mbon_weights_np = np.array(mb_data["mbon_weights"], dtype=np.float32)
 
         if "kc_history" in mb_data:
             h = mb_data["kc_history"]

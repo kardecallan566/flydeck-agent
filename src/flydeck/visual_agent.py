@@ -183,6 +183,7 @@ class MaleCNSVisualSystem:
         self.policy_bias = 0.0
         self.policy_bias_learning_rate = 0.08
         self._previous_action_sign = 0
+        self.learning_enabled = True
 
         # Normalize incoming synapse mass
         incoming = [0.0] * len(circuit.neurons)
@@ -292,6 +293,10 @@ class MaleCNSVisualSystem:
             1 if action == Prediction.UP else -1 if action == Prediction.DOWN else 0
         )
 
+    def set_learning(self, enabled: bool) -> None:
+        """Enable plasticity for training or freeze it for evaluation."""
+        self.learning_enabled = enabled
+
     def _update_policy_bias(self, observed_return_pct: float) -> None:
         if self._previous_action_sign == 0 or abs(observed_return_pct) < 1e-12:
             return
@@ -307,9 +312,11 @@ class MaleCNSVisualSystem:
         observed_ret = 0.0
         if current_price is not None and self._previous_price is not None:
             observed_ret = (current_price / self._previous_price - 1.0) * 100.0
-            self._update_policy_bias(observed_ret)
-            self.mushroom_body.reinforce(observed_ret)
-            self.metabolic_control.update_feedback(observed_ret)
+            if self.learning_enabled:
+                self._update_policy_bias(observed_ret)
+                signal = 1.0 if observed_ret > 0.0 else -1.0 if observed_ret < 0.0 else 0.0
+                self.mushroom_body.reinforce_actions((0.0, signal, -signal))
+                self.metabolic_control.update_feedback(observed_ret)
         if current_price is not None:
             self._previous_price = current_price
 
@@ -644,6 +651,9 @@ class FlyVisualPredictionAgent:
     def commit_action(self, action: Prediction) -> None:
         """Commit a training-time action for the next causal reward signal."""
         self.visual.register_action(action)
+
+    def set_learning(self, enabled: bool) -> None:
+        self.visual.set_learning(enabled)
 
     def perceive(
         self,

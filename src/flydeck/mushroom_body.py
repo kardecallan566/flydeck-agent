@@ -1,17 +1,4 @@
-"""Mushroom Body (MB) sparse associative memory with causal reinforcement learning.
-
-In Drosophila:
-- Kenyon Cells (KCs) expand sensory-contextual input into a high-dimensional space
-  with strict sparsity (~5% active), enforced by the GABAergic APL feedback neuron.
-- Mushroom Body Output Neurons (MBONs) integrate active KCs with plastic weights.
-- Dopaminergic Neurons (DANs) convey reward/punishment signals (surprise or directional confirmation)
-  inducing local synaptic plasticity on recently active KCs.
-
-Strict Causality:
-- At round t, the MB receives context S_t, activates KCs, and predicts valence V_t.
-- At round t+1, when real outcome O_t is known, the trace of KCs active at t is updated.
-- Zero future data leakage.
-"""
+"""Sparse Mushroom Body memory with causal action-value plasticity."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -25,14 +12,15 @@ except ImportError:
 
 @dataclass(frozen=True, slots=True)
 class MushroomBodyOutput:
-    valence: float              # Learned directional valence in [-1, +1]
-    active_kc_indices: tuple[int, ...]  # Active Kenyon cells in sparse representation
-    novelty: float              # Fraction of never-before-seen KCs (novelty signal)
-    memory_load: float          # Average saturation of associative weights
+    valence: float
+    active_kc_indices: tuple[int, ...]
+    novelty: float
+    memory_load: float
+    action_values: tuple[float, float, float] = (0.0, 0.0, 0.0)
 
 
 class MushroomBodyAssociativeMemory:
-    """Sparse associative memory model inspired by Drosophila Mushroom Body."""
+    """Sparse KC memory with separate WAIT, UP and DOWN MBON readouts."""
 
     def __init__(
         self,
@@ -49,7 +37,6 @@ class MushroomBodyAssociativeMemory:
             raise ValueError("kc_count must be at least 16")
         if not 0.0 < sparsity_fraction <= 0.5:
             raise ValueError("sparsity_fraction must be in (0, 0.5]")
-
         self.input_dim = input_dim
         self.kc_count = kc_count
         self.k_active = max(1, int(round(kc_count * sparsity_fraction)))
@@ -58,127 +45,99 @@ class MushroomBodyAssociativeMemory:
         self.homeostatic_target_norm = homeostatic_target_norm
         self.enabled = enabled
 
-        # Deterministic pseudo-random projection from input context to Kenyon Cells
         rng = np.random.RandomState(seed) if np is not None else None
         if np is not None:
-            # Sparse binary/ternary projection matrix (3-4 random connections per KC)
             raw_weights = rng.randn(input_dim, kc_count).astype(np.float32)
-            # Normalize projection columns
             norms = np.linalg.norm(raw_weights, axis=0, keepdims=True)
             self._projection_np = raw_weights / np.maximum(1e-6, norms)
-            # MBON synaptic weights for directional valence (positive=UP, negative=DOWN)
+            self._action_weights_np = np.zeros((3, kc_count), dtype=np.float32)
             self._mbon_weights_np = np.zeros(kc_count, dtype=np.float32)
-            # KC activation occurrence tracking for novelty
             self._kc_history_np = np.zeros(kc_count, dtype=np.float32)
         else:
             self._projection_np = None
+            self._action_weights_list = [[0.0] * kc_count for _ in range(3)]
             self._mbon_weights_np = [0.0] * kc_count
             self._kc_history_list = [0.0] * kc_count
-
-        # Eligibility trace for causal t -> t+1 reinforcement learning
         self._pending_active_kcs: tuple[int, ...] | None = None
 
     def reset(self, preserve_weights: bool = False) -> None:
-        """Reset traces, optionally keeping learned MBON associations.
-
-        A survival-training death is an episode boundary, not permission to
-        erase the experience that caused the next life to exist. The legacy
-        full reset remains the default for evaluation isolation.
-        """
         if not preserve_weights:
-            if np is not None and self._mbon_weights_np is not None:
+            if np is not None and hasattr(self, "_action_weights_np"):
+                self._action_weights_np.fill(0.0)
                 self._mbon_weights_np.fill(0.0)
                 self._kc_history_np.fill(0.0)
             else:
+                self._action_weights_list = [[0.0] * self.kc_count for _ in range(3)]
                 self._mbon_weights_np = [0.0] * self.kc_count
                 self._kc_history_list = [0.0] * self.kc_count
-        elif np is not None and self._kc_history_np is not None:
+        elif np is not None and hasattr(self, "_kc_history_np"):
             self._kc_history_np.fill(0.0)
         else:
             self._kc_history_list = [0.0] * self.kc_count
         self._pending_active_kcs = None
 
     def perceive(self, context_vector: tuple[float, ...] | np.ndarray) -> MushroomBodyOutput:
-        """Expand continuous context into sparse Kenyon Cells and read out MBON valence."""
         if not self.enabled:
-            return MushroomBodyOutput(
-                valence=0.0,
-                active_kc_indices=(),
-                novelty=0.0,
-                memory_load=0.0,
-            )
+            return MushroomBodyOutput(0.0, (), 0.0, 0.0)
+        if np is None:
+            return MushroomBodyOutput(0.0, (), 0.0, 0.0)
 
-        if np is not None:
-            ctx = np.array(context_vector, dtype=np.float32)
-            if len(ctx) != self.input_dim:
-                # Pad or truncate gracefully
-                new_ctx = np.zeros(self.input_dim, dtype=np.float32)
-                l = min(len(ctx), self.input_dim)
-                new_ctx[:l] = ctx[:l]
-                ctx = new_ctx
+        ctx = np.array(context_vector, dtype=np.float32)
+        if len(ctx) != self.input_dim:
+            padded = np.zeros(self.input_dim, dtype=np.float32)
+            padded[: min(len(ctx), self.input_dim)] = ctx[: self.input_dim]
+            ctx = padded
+        potentials = np.dot(ctx, self._projection_np)
+        top_k = np.argpartition(potentials, -self.k_active)[-self.k_active:]
+        active = tuple(int(idx) for idx in top_k)
+        q_values = tuple(
+            float(np.sum(self._action_weights_np[action, top_k]))
+            for action in range(3)
+        )
+        action_values = tuple(math.tanh(value) for value in q_values)
+        valence = math.tanh(q_values[1] - q_values[2])
+        novelty = float(np.sum(self._kc_history_np[top_k] < 2.0)) / self.k_active
+        self._kc_history_np[top_k] += 1.0
+        self._pending_active_kcs = active
+        memory_load = float(np.mean(np.abs(self._action_weights_np)))
+        return MushroomBodyOutput(valence, active, novelty, memory_load, action_values)
 
-            # 1. Project to Kenyon Cell membrane potentials
-            kc_potentials = np.dot(ctx, self._projection_np)
-
-            # 2. Strict K-WTA (APL GABAergic lateral inhibition) -> Sparsity ~5%
-            # Find indices of top-K activations
-            top_k_indices = np.argpartition(kc_potentials, -self.k_active)[-self.k_active:]
-            active_kcs = tuple(int(idx) for idx in top_k_indices)
-
-            # 3. Readout via MBON synaptic weights
-            valence_sum = float(np.sum(self._mbon_weights_np[top_k_indices]))
-            valence = math.tanh(valence_sum)
-
-            # 4. Novelty calculation: fraction of currently active KCs that have seen < 2 lifetime activations
-            novel_count = float(np.sum(self._kc_history_np[top_k_indices] < 2.0))
-            novelty = novel_count / self.k_active
-
-            # Increment history
-            self._kc_history_np[top_k_indices] += 1.0
-
-            # Store pending trace for delayed causal reinforcement at next step
-            self._pending_active_kcs = active_kcs
-
-            memory_load = float(np.mean(np.abs(self._mbon_weights_np)))
-            return MushroomBodyOutput(
-                valence=valence,
-                active_kc_indices=active_kcs,
-                novelty=novelty,
-                memory_load=memory_load,
-            )
-
-        # Pure-Python fallback path
-        return MushroomBodyOutput(valence=0.0, active_kc_indices=(), novelty=0.0, memory_load=0.0)
-
-    def reinforce(self, observed_return: float) -> None:
-        """Causally update MBON synaptic weights of Kenyon Cells that were active in the prior round.
-
-        Args:
-            observed_return: The realized price return or direction delta (+1 for UP, -1 for DOWN).
-        """
+    def reinforce_actions(self, rewards: tuple[float, float, float]) -> None:
+        """Update all action readouts from counterfactual next-candle rewards."""
         if not self.enabled or self._pending_active_kcs is None:
             return
-
-        active = self._pending_active_kcs
-        # Reward signal: +1 for positive move, -1 for negative move
-        dopamine_signal = math.tanh(observed_return * 20.0)
-
-        if np is not None and self._mbon_weights_np is not None:
-            # Weight decay across active units (forgetting / homeostatic scaling)
-            self._mbon_weights_np[list(active)] *= (1.0 - self.weight_decay)
-            # Associative LTP / LTD: delta W = eta * DA
-            self._mbon_weights_np[list(active)] += self.learning_rate * dopamine_signal
-            # Homeostatic synaptic downscaling (preserves relative contrast, prevents saturation)
-            norm = float(np.linalg.norm(self._mbon_weights_np))
+        if len(rewards) != 3:
+            raise ValueError("rewards must contain WAIT, UP and DOWN")
+        active = list(self._pending_active_kcs)
+        if np is not None and hasattr(self, "_action_weights_np"):
+            for action, reward in enumerate(rewards):
+                row = self._action_weights_np[action]
+                row[active] *= 1.0 - self.weight_decay
+                row[active] += self.learning_rate * max(-1.0, min(1.0, reward))
+            norm = float(np.linalg.norm(self._action_weights_np))
             if norm > self.homeostatic_target_norm:
-                self._mbon_weights_np *= (self.homeostatic_target_norm / norm)
+                self._action_weights_np *= self.homeostatic_target_norm / norm
             else:
-                np.clip(self._mbon_weights_np, -2.0, 2.0, out=self._mbon_weights_np)
+                np.clip(self._action_weights_np, -2.0, 2.0, out=self._action_weights_np)
+            self._mbon_weights_np[:] = self._action_weights_np[1] - self._action_weights_np[2]
         else:
-            for idx in active:
-                w = self._mbon_weights_np[idx] * (1.0 - self.weight_decay)
-                w += self.learning_rate * dopamine_signal
-                self._mbon_weights_np[idx] = max(-2.0, min(2.0, w))
-
-        # Clear pending trace once reinforced
+            for action, reward in enumerate(rewards):
+                for idx in active:
+                    weight = self._action_weights_list[action][idx] * (1.0 - self.weight_decay)
+                    self._action_weights_list[action][idx] = max(-2.0, min(2.0, weight + self.learning_rate * reward))
+            self._mbon_weights_np = [
+                up - down
+                for up, down in zip(self._action_weights_list[1], self._action_weights_list[2])
+            ]
         self._pending_active_kcs = None
+
+    def reinforce_action(self, action: int, reward: float) -> None:
+        """Compatibility helper for a single selected-action update."""
+        rewards = [0.0, 0.0, 0.0]
+        rewards[action] = reward
+        self.reinforce_actions(tuple(rewards))
+
+    def reinforce(self, observed_return: float) -> None:
+        """Legacy directional reinforcement mapped to UP/DOWN counterfactuals."""
+        signal = math.tanh(observed_return * 20.0)
+        self.reinforce_actions((0.0, signal, -signal))
