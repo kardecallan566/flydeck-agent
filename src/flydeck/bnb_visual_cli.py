@@ -44,7 +44,7 @@ def main() -> int:
         print(f"correct/entered: {result.correct}/{result.entered}")
         print(f"accuracy: {result.correct / result.entered:.3%}" if result.entered else "accuracy: N/A")
         print(f"coverage: {result.entered / result.rounds:.3%}" if result.rounds else "coverage: N/A")
-        print(f"exploratory actions: {result.exploratory}")
+        print(f"exploratory actions: {result.exploratory} (UP/DOWN: {result.exploratory_up}/{result.exploratory_down})")
         print(f"UP/DOWN/WAIT: {result.up}/{result.down}/{result.wait}")
         print(f"death rate per round: {result.deaths / result.rounds:.3%}" if result.rounds else "death rate per round: N/A")
         print("survival rate: deprecated; use accuracy, coverage and death rate per round")

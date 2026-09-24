@@ -21,6 +21,8 @@ class SurvivalTrainingResult:
     down: int
     wait: int
     exploratory: int
+    exploratory_up: int
+    exploratory_down: int
     survival_rate: float
 
 
@@ -71,6 +73,7 @@ def train_visual_survival(
     lives = initial_lives
     lives_started = initial_lives
     deaths = correct = entered = up = down = wait = exploratory = 0
+    exploratory_up = exploratory_down = 0
     wait_streak = 0
     current_exploration = exploration_rate
     rng = random.Random(seed)
@@ -90,13 +93,14 @@ def train_visual_survival(
                 or wait_streak >= max_wait_streak
             )
             if should_explore:
-                action = (
-                    Prediction.UP
-                    if decision.up_score >= decision.down_score
-                    else Prediction.DOWN
-                )
+                # Exploration must be action-symmetric. Choosing the current
+                # model's larger score is exploitation disguised as
+                # exploration and caused the earlier DOWN skew.
+                action = Prediction.UP if rng.random() < 0.5 else Prediction.DOWN
                 agent.commit_action(action)
                 exploratory += 1
+                exploratory_up += int(action == Prediction.UP)
+                exploratory_down += int(action == Prediction.DOWN)
                 wait_streak = 0
         else:
             wait_streak = 0
@@ -139,6 +143,8 @@ def train_visual_survival(
         down=down,
         wait=wait,
         exploratory=exploratory,
+        exploratory_up=exploratory_up,
+        exploratory_down=exploratory_down,
         survival_rate=(rounds - deaths) / rounds,
     )
 

@@ -80,3 +80,4 @@ def test_survival_training_forces_probe_after_wait_streak() -> None:
     )
     assert result.exploratory > 0
     assert result.entered == result.exploratory
+    assert result.exploratory_up + result.exploratory_down == result.exploratory
