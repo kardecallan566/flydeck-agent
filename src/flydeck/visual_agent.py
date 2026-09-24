@@ -641,6 +641,10 @@ class FlyVisualPredictionAgent:
     def reset(self, preserve_learning: bool = False) -> None:
         self.visual.reset(preserve_learning=preserve_learning)
 
+    def commit_action(self, action: Prediction) -> None:
+        """Commit a training-time action for the next causal reward signal."""
+        self.visual.register_action(action)
+
     def perceive(
         self,
         prices: tuple[float, ...],

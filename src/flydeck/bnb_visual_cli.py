@@ -17,6 +17,10 @@ def main() -> int:
     parser.add_argument("--lives", type=int, default=3, help="lives per survival episode")
     parser.add_argument("--rounds", type=int, default=None, help="maximum chronological training rounds")
     parser.add_argument("--confidence", type=float, default=0.15)
+    parser.add_argument("--exploration", type=float, default=0.30, help="initial exploration rate during survival training")
+    parser.add_argument("--min-exploration", type=float, default=0.05)
+    parser.add_argument("--wait-streak", type=int, default=8, help="force a directional probe after this many WAITs")
+    parser.add_argument("--seed", type=int, default=123)
     args = parser.parse_args()
 
     data = load_bnb_5m_csv(args.data)
@@ -28,6 +32,10 @@ def main() -> int:
             initial_lives=args.lives,
             max_rounds=args.rounds,
             confidence_threshold=args.confidence,
+            exploration_rate=args.exploration,
+            min_exploration_rate=args.min_exploration,
+            max_wait_streak=args.wait_streak,
+            seed=args.seed,
         )
         print("FlyDeck visual agent - SURVIVAL TRAINING")
         print(f"rounds: {result.rounds}")
@@ -36,6 +44,7 @@ def main() -> int:
         print(f"correct/entered: {result.correct}/{result.entered}")
         print(f"accuracy: {result.correct / result.entered:.3%}" if result.entered else "accuracy: N/A")
         print(f"coverage: {result.entered / result.rounds:.3%}" if result.rounds else "coverage: N/A")
+        print(f"exploratory actions: {result.exploratory}")
         print(f"UP/DOWN/WAIT: {result.up}/{result.down}/{result.wait}")
         print(f"death rate per round: {result.deaths / result.rounds:.3%}" if result.rounds else "death rate per round: N/A")
         print("survival rate: deprecated; use accuracy, coverage and death rate per round")

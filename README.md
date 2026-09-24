@@ -94,6 +94,25 @@ python -m flydeck.bnb_prediction_cli \
   --data data/real/BNBUSDT_5m.csv
 ```
 
+Train the visual agent with causal survival learning:
+
+```bash
+python -m flydeck.bnb_visual_cli \
+  --data data/real/BNBUSDT_5m.csv \
+  --circuit data/malecns/motion_visual.json \
+  --survival --lives 3 --rounds 1000 \
+  --confidence 0.15 --exploration 0.30 \
+  --min-exploration 0.05 --wait-streak 8
+```
+
+During survival training, the agent loses a life only after an entered UP/DOWN
+prediction is resolved by the following candle and is incorrect. To avoid the
+degenerate policy of waiting forever, epsilon exploration decays toward the
+configured minimum and a directional probe is forced after a configurable WAIT
+streak. The report separates raw WAIT decisions from exploratory actions and
+must be judged using accuracy, coverage, and death rate together; the legacy
+survival-rate field is not a profitability metric.
+
 Tests:
 
 ```bash

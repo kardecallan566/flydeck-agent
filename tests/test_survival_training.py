@@ -64,3 +64,19 @@ def test_survival_training_is_causal_and_tracks_lives() -> None:
     assert result.deaths >= 0
     assert result.up + result.down + result.wait == result.rounds
     assert 0.0 <= result.survival_rate <= 1.0
+
+
+def test_survival_training_forces_probe_after_wait_streak() -> None:
+    _agent, result = train_visual_survival(
+        dataset(),
+        circuit(),
+        context=8,
+        initial_lives=2,
+        max_rounds=12,
+        confidence_threshold=1.0,
+        exploration_rate=0.0,
+        min_exploration_rate=0.0,
+        max_wait_streak=1,
+    )
+    assert result.exploratory > 0
+    assert result.entered == result.exploratory
