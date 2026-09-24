@@ -48,3 +48,18 @@ def test_visual_metrics_include_brier_ece_and_regimes() -> None:
         assert metrics.brier_score >= 0.0
         assert metrics.expected_calibration_error >= 0.0
         assert sum(count for _regime, count in metrics.regimes) == metrics.rounds
+
+
+def test_detector_identifies_persistent_up_and_down_motion() -> None:
+    from flydeck.market_retina import RetinaStimulus
+
+    def stimulus(velocity: float, acceleration: float = 0.0) -> RetinaStimulus:
+        field = ((0.0,),)
+        return RetinaStimulus(field, field, (0.0, 0.0, 0.0, 0.0), 0.9, velocity, acceleration, 1.0, 0.2, velocity, 0.9)
+
+    detector = CausalRegimeDetector()
+    up_states = [detector.step(stimulus(0.45)) for _ in range(20)]
+    assert up_states[-1].regime == MarketRegime.TREND_UP
+    detector.reset()
+    down_states = [detector.step(stimulus(-0.45)) for _ in range(20)]
+    assert down_states[-1].regime == MarketRegime.TREND_DOWN

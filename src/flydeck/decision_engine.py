@@ -51,6 +51,8 @@ class DynamicDecisionEngine:
         self._evidence_center = 0.0
         self._mb_center = 0.0
         self.center_learning_rate = 0.02
+        self.wait_value_cap = 0.20
+        self.wait_decision_margin = 0.10
 
     def reset(self) -> None:
         self._recent_evidence_history.clear()
@@ -95,7 +97,9 @@ class DynamicDecisionEngine:
         directional = 0.70 * centered_signal + 0.30 * centered_mb
         up_score = max(0.0, directional)
         down_score = max(0.0, -directional)
-        learned_wait = max(0.0, mb_wait_q)
+        # WAIT is an abstention signal, not a permanently dominant action.
+        # Cap it so one learned readout cannot erase all future coverage.
+        learned_wait = min(self.wait_value_cap, max(0.0, mb_wait_q))
         confidence = max(up_score, down_score)
         self._evidence_center = (1.0 - self.center_learning_rate) * self._evidence_center + self.center_learning_rate * combined
         self._mb_center = (1.0 - self.center_learning_rate) * self._mb_center + self.center_learning_rate * (mb_up_q - mb_down_q)
@@ -119,7 +123,7 @@ class DynamicDecisionEngine:
             return self._wait(DecisionReason.WAIT_HIGH_CONFLICT, up_score, down_score, confidence, conflict_val, state, temporal_consistency, p_wait, p_up, p_down)
         if state.uncertainty >= self.max_uncertainty_tolerance:
             return self._wait(DecisionReason.WAIT_HIGH_UNCERTAINTY, up_score, down_score, confidence, conflict_val, state, temporal_consistency, p_wait, p_up, p_down)
-        if confidence < threshold or learned_wait > max(up_score, down_score) + 0.05:
+        if confidence < threshold or learned_wait > max(up_score, down_score) + self.wait_decision_margin:
             return self._wait(DecisionReason.WAIT_LOW_CONFIDENCE, up_score, down_score, confidence, conflict_val, state, temporal_consistency, p_wait, p_up, p_down)
 
         action = Prediction.UP if up_score > down_score else Prediction.DOWN
@@ -135,7 +139,10 @@ class DynamicDecisionEngine:
 
 
 def _action_probabilities(up_score: float, down_score: float, wait_score: float) -> tuple[float, float, float]:
-    values = (wait_score, up_score, down_score)
-    exps = [math.exp(min(20.0, value / 0.20)) for value in values]
-    total = sum(exps) or 1.0
-    return tuple(value / total for value in exps)
+    # Conservative probabilities: raw neural scores are not probabilities.
+    # Keep directional confidence near 0.5 until a large, stable margin exists.
+    margin = up_score - down_score
+    p_direction_up = 0.5 + 0.25 * math.tanh(margin / 0.60)
+    wait_mass = min(0.45, max(0.05, wait_score * 0.50))
+    directional_mass = 1.0 - wait_mass
+    return (wait_mass, directional_mass * p_direction_up, directional_mass * (1.0 - p_direction_up))

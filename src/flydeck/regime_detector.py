@@ -25,11 +25,14 @@ class RegimeState:
 class CausalRegimeDetector:
     """Online regime classifier using only the current and prior retina state."""
 
-    def __init__(self, trend_alpha: float = 0.12, volatility_alpha: float = 0.10) -> None:
+    def __init__(self, trend_alpha: float = 0.12, volatility_alpha: float = 0.10,
+                 trend_threshold: float = 0.045, persistence_threshold: float = 0.25) -> None:
         if not 0.0 < trend_alpha <= 1.0 or not 0.0 < volatility_alpha <= 1.0:
             raise ValueError("regime EMA alphas must be in (0, 1]")
         self.trend_alpha = trend_alpha
         self.volatility_alpha = volatility_alpha
+        self.trend_threshold = trend_threshold
+        self.persistence_threshold = persistence_threshold
         self._trend_ema = 0.0
         self._volatility_ema = 0.0
         self._previous_velocity = 0.0
@@ -63,11 +66,11 @@ class CausalRegimeDetector:
         persistence = max(0.0, min(1.0, stimulus.coherence * 0.65 + stimulus.short_coherence * 0.35))
         trend_score = max(-1.0, min(1.0, self._trend_ema * (0.55 + 0.45 * persistence)))
 
-        if shock_score >= 0.72:
+        if shock_score >= 0.68:
             regime = MarketRegime.SHOCK
-        elif trend_score >= 0.16 and persistence >= 0.42:
+        elif trend_score >= self.trend_threshold and persistence >= self.persistence_threshold:
             regime = MarketRegime.TREND_UP
-        elif trend_score <= -0.16 and persistence >= 0.42:
+        elif trend_score <= -self.trend_threshold and persistence >= self.persistence_threshold:
             regime = MarketRegime.TREND_DOWN
         else:
             regime = MarketRegime.RANGE
