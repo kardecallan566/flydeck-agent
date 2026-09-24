@@ -42,6 +42,8 @@ class AgentInternalState:
     mb_novelty: float = 0.0             # Familiarity/novelty of current sparse KC representation
     mb_action_values: tuple[float, float, float] = (0.0, 0.0, 0.0)  # WAIT, UP, DOWN
     policy_bias: float = 0.0            # Causal UP(+)/DOWN(-) homeostatic correction
+    regime: str = "RANGE"
+    regime_confidence: float = 0.0
 
     # 5. Predictive Coding & Expectation
     expectation: float = 0.0            # Continuous expected market dynamic in [-1, +1]
@@ -85,6 +87,8 @@ class AgentInternalState:
             mb_novelty=self.mb_novelty,
             mb_action_values=self.mb_action_values,
             policy_bias=self.policy_bias,
+            regime=self.regime,
+            regime_confidence=self.regime_confidence,
             expectation=self.expectation,
             prediction_error=self.prediction_error,
             signed_error=self.signed_error,

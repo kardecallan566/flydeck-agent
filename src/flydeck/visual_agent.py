@@ -22,6 +22,7 @@ from .mushroom_body import MushroomBodyAssociativeMemory, MushroomBodyOutput
 from .neural_diagnostics import CandleDiagnosticEntry, NeuralDiagnosticsTracer
 from .predictive_coding import PredictiveCodingEngine, PredictiveCodingUpdate
 from .receptive_fields import ReceptiveField, infer_receptive_fields
+from .regime_detector import CausalRegimeDetector
 from .synaptic_adaptation import SynapticAdaptation
 from .visual_circuit import VisualCircuit
 
@@ -39,6 +40,10 @@ class VisualDecision:
     slow_bias: float = 0.0
     action: Prediction = Prediction.WAIT
     reason: str = "DEFAULT"
+    p_wait: float = 0.0
+    p_up: float = 0.5
+    p_down: float = 0.5
+    regime: str = "RANGE"
 
 
 class MaleCNSVisualSystem:
@@ -155,6 +160,7 @@ class MaleCNSVisualSystem:
             max_conflict_tolerance=conflict_threshold,
             enabled=not ablate_conflict_engine,
         )
+        self.regime_detector = CausalRegimeDetector()
         self.attention = TopDownAttentionModule(
             enabled=not ablate_attention,
         )
@@ -282,6 +288,7 @@ class MaleCNSVisualSystem:
         self.last_pred_update = None
         self.last_shock_state = None
         self.last_attention_state = None
+        self.regime_detector.reset()
         self._previous_price = None
         # policy_bias is a short-term homeostatic correction, not a learned
         # context association. Never carry it across an episode/split; the
@@ -439,6 +446,7 @@ class MaleCNSVisualSystem:
         st = self.internal_state
         volatility = self.last_stimulus.volatility_contrast if self.last_stimulus else 0.0035
         coherence = self.last_stimulus.coherence if self.last_stimulus else 0.5
+        regime_state = self.regime_detector.step(self.last_stimulus) if self.last_stimulus else self.regime_detector.state
 
         # 1. Top-Down Attention Step
         att_state = self.attention.step(
@@ -526,6 +534,8 @@ class MaleCNSVisualSystem:
         st.volume_contrast = self.last_stimulus.volume_contrast if self.last_stimulus else 1.0
         st.volatility_contrast = volatility
         st.coherence = coherence
+        st.regime = regime_state.regime.value
+        st.regime_confidence = max(regime_state.persistence, regime_state.shock_score)
         st.vs_net = lptc_signal
         st.hs_net = self.last_lptc_out.hs_net if self.last_lptc_out else 0.0
         st.motion_energy = self.last_lptc_out.motion_energy if self.last_lptc_out else 0.0
@@ -565,6 +575,10 @@ class MaleCNSVisualSystem:
             slow_bias=st.cx_slow_bias,
             action=decision.action,
             reason=decision.reason.value,
+            p_wait=decision.p_wait,
+            p_up=decision.p_up,
+            p_down=decision.p_down,
+            regime=decision.regime,
         )
 
     def entry_activity_grid(self, width: int = 32, height: int = 16) -> tuple[tuple[float, ...], ...]:

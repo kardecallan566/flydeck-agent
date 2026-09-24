@@ -36,7 +36,11 @@ A atualização dos centros usa somente o estado atual, antes de qualquer result
 
 A próxima etapa deve adicionar ao relatório de cada split a média, o desvio e os quantis de `combined_signal`, `Q(UP)`, `Q(DOWN)`, `Q(WAIT)` e da distribuição real dos outcomes. Isso permitirá distinguir um viés do circuito de um viés da distribuição de mercado.
 
-Depois, deve ser implementado um detector causal de quatro regimes: tendência de alta, tendência de baixa, consolidação e choque. O detector deve usar somente retornos passados, volatilidade rolling, persistência de sinal e amplitude relativa. A política pode então exigir margem maior em consolidação e bloquear entradas em choque.
+O agente agora classifica cada estado observado como `TREND_UP`, `TREND_DOWN`, `RANGE` ou `SHOCK`. O detector usa médias exponenciais do movimento e da volatilidade, coerência do movimento, persistência de direção, aceleração e contraste de volume. O estado em `t` usa apenas a janela de preços e volumes disponível em `t`; não usa o outcome do candle seguinte. `SHOCK` bloqueia a entrada e produz `WAIT_REGIME_SHOCK`. `RANGE` aumenta modestamente o limiar de confiança. Os regimes de tendência mantêm a decisão direcional, mas ficam registrados para comparação de desempenho por regime.
+
+O benchmark também calcula duas métricas para as previsões que realmente entram. O **Brier Score** é a média do erro quadrático entre a probabilidade direcional atribuída à classe correta e o resultado observado; quanto menor, melhor. O **Expected Calibration Error (ECE)** agrupa as confianças em dez faixas e calcula a diferença média ponderada entre confiança e frequência de acerto; quanto menor, melhor. Essas métricas não substituem acurácia: o Brier Score combina calibração, resolução e incerteza, enquanto o ECE depende da forma de agrupamento.
+
+Uma confiança alta com ECE alto significa que o agente está excessivamente confiante. Uma confiança baixa com ECE baixo pode ser bem calibrada, mas ainda pouco útil se a cobertura for pequena. A leitura correta combina `accuracy`, `coverage`, `brier_score`, `expected_calibration_error` e a distribuição de regimes.
 
 A avaliação deve evoluir de um único split para walk-forward com várias janelas. Cada janela deve ajustar pesos e qualquer calibrador apenas no passado, aplicar uma pequena purga correspondente ao horizonte de previsão e avaliar no bloco seguinte. O resultado final deve incluir média, mediana e intervalo entre janelas, além de acurácia por regime.
 

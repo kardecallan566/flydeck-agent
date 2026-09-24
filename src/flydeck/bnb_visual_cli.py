@@ -59,6 +59,9 @@ def main() -> int:
         print(f"correct: {metrics.correct}")
         print(f"accuracy: {metrics.accuracy:.3%}")
         print(f"coverage: {metrics.coverage:.3%}")
+        print(f"brier score: {metrics.brier_score:.6f}")
+        print(f"expected calibration error: {metrics.expected_calibration_error:.6f}")
+        print(f"regimes: {dict(metrics.regimes)}")
         print(f"UP/DOWN/WAIT: {metrics.up}/{metrics.down}/{metrics.wait}")
     return 0
 
