@@ -57,9 +57,14 @@ class DynamicDecisionEngine:
         self.enabled = enabled
 
         self._recent_evidence_history: list[float] = []
+        self._evidence_center = 0.0
+        self._mb_center = 0.0
+        self.center_learning_rate = 0.02
 
     def reset(self) -> None:
         self._recent_evidence_history.clear()
+        self._evidence_center = 0.0
+        self._mb_center = 0.0
 
     def decide(
         self,
@@ -127,10 +132,21 @@ class DynamicDecisionEngine:
         # The associative readouts are action-specific. Blend them with the
         # causal sensory evidence; otherwise MBON_UP/DOWN/WAIT would be
         # trained but never reach the final behavioural decision.
-        up_score = max(0.0, 0.70 * combined_signal + 0.30 * mb_up_q)
-        down_score = max(0.0, 0.70 * (-combined_signal) + 0.30 * mb_down_q)
+        centered_signal = combined_signal - self._evidence_center
+        centered_mb = (mb_up_q - mb_down_q) - self._mb_center
+        directional_signal = 0.70 * centered_signal + 0.30 * centered_mb
+        up_score = max(0.0, directional_signal)
+        down_score = max(0.0, -directional_signal)
         learned_wait = max(0.0, mb_wait_q)
         confidence = max(up_score, down_score)
+        self._evidence_center = (
+            (1.0 - self.center_learning_rate) * self._evidence_center
+            + self.center_learning_rate * combined_signal
+        )
+        self._mb_center = (
+            (1.0 - self.center_learning_rate) * self._mb_center
+            + self.center_learning_rate * (mb_up_q - mb_down_q)
+        )
 
         # Dynamic adaptive threshold modulated by:
         # - Coherence
