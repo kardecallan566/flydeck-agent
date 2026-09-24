@@ -19,6 +19,7 @@ lib64/
 parts/
 sdist/
 var/
+imgs/
 wheels/
 share/python-wheels/
 *.egg-info/
@@ -178,3 +179,6 @@ __marimo__/
 data/real/
 data/malecns/raw/
 data/malecns/*.json
+data/checkpoints/live_fly_brain.json
+data/logs/live_diagnostics.jsonl
+testes_flydeck_pancake.csv
