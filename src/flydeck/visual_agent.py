@@ -281,7 +281,7 @@ class MaleCNSVisualSystem:
         self.central_complex.reset()
         self.mushroom_body.reset(preserve_weights=preserve_learning)
         self.predictive_coding.reset()
-        self.decision_engine.reset()
+        self.decision_engine.reset(preserve_learning=preserve_learning)
         self.attention.reset()
         self.giant_fiber.reset()
         self.metabolic_control.reset()
@@ -313,6 +313,7 @@ class MaleCNSVisualSystem:
     def set_learning(self, enabled: bool) -> None:
         """Enable plasticity for training or freeze it for evaluation."""
         self.learning_enabled = enabled
+        self.decision_engine.set_learning(enabled)
 
     def _update_policy_bias(self, observed_return_pct: float) -> None:
         if self._previous_action_sign == 0 or abs(observed_return_pct) < 1e-12:
@@ -334,6 +335,9 @@ class MaleCNSVisualSystem:
                 self._update_policy_bias(observed_ret)
                 signal = 1.0 if observed_ret > 0.0 else -1.0 if observed_ret < 0.0 else 0.0
                 self.mushroom_body.reinforce_actions((0.0, signal, -signal))
+                self.decision_engine.observe_outcome(
+                    Prediction.UP if observed_ret > 0.0 else Prediction.DOWN if observed_ret < 0.0 else Prediction.WAIT
+                )
                 self.metabolic_control.update_feedback(observed_ret)
         if current_price is not None:
             self._previous_price = current_price

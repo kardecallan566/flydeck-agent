@@ -24,6 +24,8 @@ class VisualMetrics:
     # regime, rounds, entries, accuracy, brier, ece
     regime_metrics: tuple[tuple[str, int, int, float, float, float], ...]
     wait_reasons: tuple[tuple[str, int], ...]
+    multiclass_brier_score: float
+    multiclass_expected_calibration_error: float
 
 
 def run_visual_benchmark(data: BNBPredictionDataset, circuit: VisualCircuit,
@@ -49,7 +51,9 @@ def _split(agent: FlyVisualPredictionAgent, data: BNBPredictionDataset,
            start: int, end: int, context: int) -> VisualMetrics:
     entered = correct = up = down = wait = 0
     brier_total = 0.0
+    multiclass_brier_total = 0.0
     calibration: list[tuple[float, int]] = []
+    multiclass_calibration: list[tuple[float, int]] = []
     regime_counts: dict[str, int] = {}
     regime_entries: dict[str, int] = {}
     regime_correct: dict[str, int] = {}
@@ -65,6 +69,13 @@ def _split(agent: FlyVisualPredictionAgent, data: BNBPredictionDataset,
         regime = decision.regime
         regime_counts[regime] = regime_counts.get(regime, 0) + 1
         regime_calibration.setdefault(regime, [])
+        probabilities = (decision.p_wait, decision.p_up, decision.p_down)
+        target = (1.0 if outcome == Prediction.WAIT else 0.0,
+                  1.0 if outcome == Prediction.UP else 0.0,
+                  1.0 if outcome == Prediction.DOWN else 0.0)
+        multiclass_brier_total += sum((probability - expected) ** 2 for probability, expected in zip(probabilities, target))
+        predicted_class = max(range(3), key=lambda item: probabilities[item])
+        multiclass_calibration.append((max(probabilities), int(predicted_class == int(outcome))))
         if decision.wait:
             wait += 1
             reason = str(decision.reason)
@@ -108,11 +119,13 @@ def _split(agent: FlyVisualPredictionAgent, data: BNBPredictionDataset,
         up=up,
         down=down,
         wait=wait,
-        brier_score=brier_total / entered if entered else 0.0,
-        expected_calibration_error=_expected_calibration_error(calibration),
+        brier_score=multiclass_brier_total / rounds if rounds else 0.0,
+        expected_calibration_error=_expected_calibration_error(multiclass_calibration),
         regimes=tuple(sorted(regime_counts.items())),
         regime_metrics=regime_metrics,
         wait_reasons=tuple(sorted(wait_reasons.items())),
+        multiclass_brier_score=multiclass_brier_total / rounds if rounds else 0.0,
+        multiclass_expected_calibration_error=_expected_calibration_error(multiclass_calibration),
     )
 
 

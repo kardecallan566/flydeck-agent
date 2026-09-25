@@ -6,6 +6,7 @@ from enum import Enum
 import math
 
 from .bnb_prediction import Prediction
+from .action_head import ActionProbabilityHead
 from .internal_state import AgentInternalState
 
 
@@ -53,11 +54,21 @@ class DynamicDecisionEngine:
         self.center_learning_rate = 0.02
         self.wait_value_cap = 0.20
         self.wait_decision_margin = 0.10
+        self.action_head = ActionProbabilityHead()
+        self.minimum_direction_probability = 0.40
+        self.minimum_directional_margin = 0.08
 
-    def reset(self) -> None:
+    def reset(self, preserve_learning: bool = False) -> None:
         self._recent_evidence_history.clear()
         self._evidence_center = 0.0
         self._mb_center = 0.0
+        self.action_head.reset(preserve_learning=preserve_learning)
+
+    def set_learning(self, enabled: bool) -> None:
+        self.action_head.set_learning(enabled)
+
+    def observe_outcome(self, outcome: Prediction) -> None:
+        self.action_head.observe(outcome)
 
     def decide(self, state: AgentInternalState, minimum_confidence: float | None = None,
                metabolic_modifier: float = 0.0) -> DecoupledDecision:
@@ -120,7 +131,14 @@ class DynamicDecisionEngine:
             threshold += 0.04
         if temporal_consistency >= 0.80 and confidence > 0.10:
             threshold = max(0.08, threshold - 0.03)
-        p_wait, p_up, p_down = _action_probabilities(up_score, down_score, learned_wait)
+        probabilities = self.action_head.predict(
+            up_score,
+            down_score,
+            learned_wait,
+            uncertainty=state.uncertainty,
+            novelty=state.feature_novelty,
+        )
+        p_wait, p_up, p_down = probabilities.as_tuple()
 
         if state.is_shock or state.regime == "SHOCK":
             return self._wait(DecisionReason.WAIT_REGIME_SHOCK, up_score, down_score, confidence, conflict_val, state, temporal_consistency, p_wait, p_up, p_down)
@@ -130,7 +148,11 @@ class DynamicDecisionEngine:
             return self._wait(DecisionReason.WAIT_HIGH_CONFLICT, up_score, down_score, confidence, conflict_val, state, temporal_consistency, p_wait, p_up, p_down)
         if state.uncertainty >= self.max_uncertainty_tolerance:
             return self._wait(DecisionReason.WAIT_HIGH_UNCERTAINTY, up_score, down_score, confidence, conflict_val, state, temporal_consistency, p_wait, p_up, p_down)
-        if confidence < threshold or learned_wait > max(up_score, down_score) + self.wait_decision_margin:
+        calibrated_wait = p_wait >= max(p_up, p_down)
+        weak_direction = max(p_up, p_down) < self.minimum_direction_probability
+        narrow_margin = probabilities.directional_margin < self.minimum_directional_margin
+        if (confidence < threshold or learned_wait > max(up_score, down_score) + self.wait_decision_margin
+                or calibrated_wait or weak_direction or narrow_margin):
             return self._wait(DecisionReason.WAIT_LOW_CONFIDENCE, up_score, down_score, confidence, conflict_val, state, temporal_consistency, p_wait, p_up, p_down)
 
         action = Prediction.UP if up_score > down_score else Prediction.DOWN

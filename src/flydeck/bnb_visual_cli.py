@@ -61,6 +61,8 @@ def main() -> int:
         print(f"coverage: {metrics.coverage:.3%}")
         print(f"brier score: {metrics.brier_score:.6f}")
         print(f"expected calibration error: {metrics.expected_calibration_error:.6f}")
+        print(f"multiclass brier score (UP/DOWN/WAIT): {metrics.multiclass_brier_score:.6f}")
+        print(f"multiclass expected calibration error: {metrics.multiclass_expected_calibration_error:.6f}")
         print(f"regimes: {dict(metrics.regimes)}")
         for regime, regime_rounds, entries, accuracy, brier, ece in metrics.regime_metrics:
             print(f"  {regime}: rounds={regime_rounds} entered={entries} accuracy={accuracy:.3%} brier={brier:.6f} ece={ece:.6f}")
