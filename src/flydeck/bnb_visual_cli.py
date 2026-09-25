@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .bnb_prediction_data_runner import load_bnb_5m_csv
 from .bnb_visual_runner import run_visual_benchmark
+from .crypto_event_runner import run_crypto_event_benchmark
 from .survival_training import train_visual_survival
 from .visual_circuit import VisualCircuit
 
@@ -21,10 +22,36 @@ def main() -> int:
     parser.add_argument("--min-exploration", type=float, default=0.05)
     parser.add_argument("--wait-streak", type=int, default=8, help="force a directional probe after this many WAITs")
     parser.add_argument("--seed", type=int, default=123)
+    parser.add_argument("--crypto-event", action="store_true", help="evaluate continuous multi-horizon crypto policy")
+    parser.add_argument("--fee-bps", type=float, default=5.0)
+    parser.add_argument("--slippage-bps", type=float, default=2.0)
     args = parser.parse_args()
 
     data = load_bnb_5m_csv(args.data)
     circuit = VisualCircuit.load(args.circuit)
+    if args.crypto_event:
+        from .crypto_event_policy import CryptoEventConfig
+        metrics = run_crypto_event_benchmark(
+            data, circuit,
+            config=CryptoEventConfig(fee_bps=args.fee_bps, slippage_bps=args.slippage_bps),
+        )
+        print("FlyDeck visual agent - CRYPTO EVENT POLICY")
+        print(f"visual neurons: {len(circuit.neurons)}")
+        print(f"visual edges: {len(circuit.edges)}")
+        for name, result in zip(("TRAIN", "VALIDATION", "TEST"), metrics):
+            print(f"\n{name}")
+            print(f"rounds: {result.rounds}")
+            print(f"signals: {result.signals}")
+            print(f"positive/negative/flat: {result.positive_signals}/{result.negative_signals}/{result.flat_signals}")
+            print(f"total return net: {result.total_return:.4%}")
+            print(f"max drawdown: {result.max_drawdown:.4%}")
+            print(f"volatility: {result.volatility:.6f}")
+            print(f"sharpe-like: {result.sharpe_like:.4f}")
+            print(f"hit rate: {result.hit_rate:.3%}")
+            print(f"average position: {result.average_position:.4f}")
+            print(f"average horizon: {result.average_horizon:.2f} candles")
+            print(f"labels UP/DOWN/WAIT: {result.labels_up}/{result.labels_down}/{result.labels_wait}")
+        return 0
     if args.survival:
         _agent, result = train_visual_survival(
             data,
