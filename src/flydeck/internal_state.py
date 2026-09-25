@@ -44,6 +44,12 @@ class AgentInternalState:
     policy_bias: float = 0.0            # Causal UP(+)/DOWN(-) homeostatic correction
     regime: str = "RANGE"
     regime_confidence: float = 0.0
+    regime_probabilities: tuple[float, float, float, float] = (0.25, 0.25, 0.25, 0.25)
+    regime_duration: int = 0
+    feature_vector: tuple[float, ...] = ()
+    fast_memory: float = 0.0
+    slow_memory: float = 0.0
+    feature_novelty: float = 0.0
 
     # 5. Predictive Coding & Expectation
     expectation: float = 0.0            # Continuous expected market dynamic in [-1, +1]
@@ -89,6 +95,12 @@ class AgentInternalState:
             policy_bias=self.policy_bias,
             regime=self.regime,
             regime_confidence=self.regime_confidence,
+            regime_probabilities=self.regime_probabilities,
+            regime_duration=self.regime_duration,
+            feature_vector=self.feature_vector,
+            fast_memory=self.fast_memory,
+            slow_memory=self.slow_memory,
+            feature_novelty=self.feature_novelty,
             expectation=self.expectation,
             prediction_error=self.prediction_error,
             signed_error=self.signed_error,

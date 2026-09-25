@@ -9,6 +9,7 @@ except ImportError:
     np = None
 
 from .attention_system import AttentionState, TopDownAttentionModule
+from .causal_features import CausalFeatureBank, CausalFeatureVector
 from .bnb_prediction import Prediction
 from .central_complex import CentralComplexState, CentralComplexSystem
 from .decision_engine import DecoupledDecision, DecisionReason, DynamicDecisionEngine
@@ -23,6 +24,7 @@ from .neural_diagnostics import CandleDiagnosticEntry, NeuralDiagnosticsTracer
 from .predictive_coding import PredictiveCodingEngine, PredictiveCodingUpdate
 from .receptive_fields import ReceptiveField, infer_receptive_fields
 from .regime_detector import CausalRegimeDetector
+from .temporal_memory import DualTimescaleMemory
 from .synaptic_adaptation import SynapticAdaptation
 from .visual_circuit import VisualCircuit
 
@@ -161,6 +163,8 @@ class MaleCNSVisualSystem:
             enabled=not ablate_conflict_engine,
         )
         self.regime_detector = CausalRegimeDetector()
+        self.feature_bank = CausalFeatureBank()
+        self.temporal_memory = DualTimescaleMemory()
         self.attention = TopDownAttentionModule(
             enabled=not ablate_attention,
         )
@@ -251,6 +255,7 @@ class MaleCNSVisualSystem:
         self.last_directional_t5 = (0.0, 0.0, 0.0, 0.0)
 
         self.last_stimulus: RetinaStimulus | None = None
+        self.last_features: CausalFeatureVector | None = None
         self.last_entry_drive = [0.0] * len(circuit.neurons)
         self.previous_on_field: tuple[tuple[float, ...], ...] | None = None
         self.previous_off_field: tuple[tuple[float, ...], ...] | None = None
@@ -263,6 +268,7 @@ class MaleCNSVisualSystem:
             self._state_np.fill(0.0)
             self._filtered_state_np.fill(0.0)
         self.last_stimulus = None
+        self.last_features = None
         self.last_entry_drive = [0.0] * len(self.state)
         self.previous_on_field = None
         self.previous_off_field = None
@@ -289,6 +295,8 @@ class MaleCNSVisualSystem:
         self.last_shock_state = None
         self.last_attention_state = None
         self.regime_detector.reset()
+        self.feature_bank.reset()
+        self.temporal_memory.reset()
         self._previous_price = None
         # policy_bias is a short-term homeostatic correction, not a learned
         # context association. Never carry it across an episode/split; the
@@ -316,7 +324,8 @@ class MaleCNSVisualSystem:
             min(0.15, self.policy_bias + self.policy_bias_learning_rate * error),
         )
 
-    def step(self, stimulus: RetinaStimulus, current_price: float | None = None) -> tuple[float, ...]:
+    def step(self, stimulus: RetinaStimulus, current_price: float | None = None,
+             features: CausalFeatureVector | None = None) -> tuple[float, ...]:
         # 1. Causal Reinforcement & Shock Detection from prior step
         observed_ret = 0.0
         if current_price is not None and self._previous_price is not None:
@@ -340,6 +349,10 @@ class MaleCNSVisualSystem:
         self.last_shock_state = shock_state
 
         self.last_stimulus = stimulus
+        self.last_features = features
+        if features is not None:
+            memory_signal = max(-1.0, min(1.0, 0.55 * features.short_return + 0.30 * features.medium_return + 0.15 * features.long_return))
+            self.temporal_memory.update(memory_signal, features.novelty)
         drive = self._entry_drive(stimulus)
         self.last_entry_drive = drive
 
@@ -446,7 +459,8 @@ class MaleCNSVisualSystem:
         st = self.internal_state
         volatility = self.last_stimulus.volatility_contrast if self.last_stimulus else 0.0035
         coherence = self.last_stimulus.coherence if self.last_stimulus else 0.5
-        regime_state = self.regime_detector.step(self.last_stimulus) if self.last_stimulus else self.regime_detector.state
+        regime_state = self.regime_detector.step(self.last_stimulus, self.last_features) if self.last_stimulus else self.regime_detector.state
+        memory_state = self.temporal_memory.state
 
         # 1. Top-Down Attention Step
         att_state = self.attention.step(
@@ -489,7 +503,7 @@ class MaleCNSVisualSystem:
         st.shock_magnitude = self.last_shock_state.shock_magnitude if self.last_shock_state else 0.0
 
         cx_state = self.central_complex.step(
-            sensory_signal=0.50 * lptc_signal + 0.50 * retina_vel_signal,
+            sensory_signal=0.40 * lptc_signal + 0.35 * retina_vel_signal + 0.25 * memory_state.fast,
             volatility=volatility,
             coherence=coherence,
             mb_feedback=mb_prior_valence,
@@ -535,7 +549,13 @@ class MaleCNSVisualSystem:
         st.volatility_contrast = volatility
         st.coherence = coherence
         st.regime = regime_state.regime.value
-        st.regime_confidence = max(regime_state.persistence, regime_state.shock_score)
+        st.regime_confidence = max(regime_state.probabilities)
+        st.regime_probabilities = regime_state.probabilities
+        st.regime_duration = regime_state.duration
+        st.feature_vector = self.last_features.values if self.last_features else ()
+        st.fast_memory = memory_state.fast
+        st.slow_memory = memory_state.slow
+        st.feature_novelty = memory_state.novelty
         st.vs_net = lptc_signal
         st.hs_net = self.last_lptc_out.hs_net if self.last_lptc_out else 0.0
         st.motion_energy = self.last_lptc_out.motion_energy if self.last_lptc_out else 0.0
@@ -678,8 +698,9 @@ class FlyVisualPredictionAgent:
         volumes: tuple[float, ...] | None = None,
     ) -> tuple[RetinaStimulus, VisualDecision]:
         current_price = prices[-1] if prices else None
+        features = self.visual.feature_bank.transform(prices, volumes=volumes)
         stimulus = self.retina.encode(prices, volumes=volumes)
-        self.visual.step(stimulus, current_price=current_price)
+        self.visual.step(stimulus, current_price=current_price, features=features)
         decision = self.visual.decision(self.confidence_threshold)
         self.visual.register_action(decision.action)
         return stimulus, decision

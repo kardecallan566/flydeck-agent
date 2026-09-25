@@ -91,7 +91,14 @@ class DynamicDecisionEngine:
         else:
             temporal_consistency = 1.0 if directional_bias != 0.0 else 0.5
 
-        combined = 0.35 * lptc_ev + 0.25 * retina_ev + 0.20 * cx_ev + 0.20 * mb_ev
+        combined = (
+            0.30 * lptc_ev
+            + 0.20 * retina_ev
+            + 0.15 * cx_ev
+            + 0.15 * mb_ev
+            + 0.10 * state.fast_memory
+            + 0.10 * state.slow_memory
+        )
         centered_signal = combined - self._evidence_center
         centered_mb = (mb_up_q - mb_down_q) - self._mb_center
         directional = 0.70 * centered_signal + 0.30 * centered_mb
