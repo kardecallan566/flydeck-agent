@@ -39,3 +39,12 @@ def test_crypto_event_policy_reduces_exposure_but_does_not_veto_shock() -> None:
     shock = CryptoEventPolicy().decide(decision, uncertainty=0.1, novelty=0.0, regime="SHOCK")
     assert shock.position > 0.0
     assert abs(shock.position) < abs(normal.position)
+
+
+def test_wait_probability_cannot_create_large_position() -> None:
+    decision = VisualDecision(up_score=0.8, down_score=0.1, confidence=0.8, wait=True,
+                             consensus=0.8, conflict=0.0, arousal=0.2, fast_bias=0.4,
+                             slow_bias=0.2, action=Prediction.WAIT, reason="WAIT_LOW_CONFIDENCE",
+                             p_wait=0.80, p_up=0.12, p_down=0.08, regime="RANGE")
+    action = CryptoEventPolicy().decide(decision)
+    assert abs(action.position) < 0.05

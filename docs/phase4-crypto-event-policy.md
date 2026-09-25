@@ -17,6 +17,8 @@ risk
 
 Valores positivos representam exposição comprada e valores negativos representam exposição vendida. Uma posição próxima de zero significa exposição pequena, mas não depende de uma regra binária `WAIT`.
 
+O sizing padrão é limitado a `35%` de exposição. A política exige edge direcional mínimo de `0.18` e não considera `P(WAIT)` como confiança direcional. Se a cabeça estiver em abstinência, a posição é reduzida suavemente em vez de receber exposição alta por engano.
+
 ## Rótulos econômicos
 
 `CryptoEventLabeler` calcula retornos futuros em três horizontes:
