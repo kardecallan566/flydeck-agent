@@ -18,6 +18,7 @@ class DecisionReason(str, Enum):
     WAIT_HIGH_UNCERTAINTY = "WAIT_HIGH_UNCERTAINTY"
     WAIT_NEUTRAL_REGIME = "WAIT_NEUTRAL_REGIME"
     WAIT_REGIME_SHOCK = "WAIT_REGIME_SHOCK"
+    WAIT_RISK_POLICY = "WAIT_RISK_POLICY"
 
 
 @dataclass(frozen=True, slots=True)

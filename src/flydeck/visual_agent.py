@@ -10,6 +10,8 @@ except ImportError:
 
 from .attention_system import AttentionState, TopDownAttentionModule
 from .causal_features import CausalFeatureBank, CausalFeatureVector
+from .eligibility import SparseEligibilityTrace
+from .episodic_memory import BoundedEpisodicMemory
 from .bnb_prediction import Prediction
 from .central_complex import CentralComplexState, CentralComplexSystem
 from .decision_engine import DecoupledDecision, DecisionReason, DynamicDecisionEngine
@@ -25,6 +27,7 @@ from .predictive_coding import PredictiveCodingEngine, PredictiveCodingUpdate
 from .receptive_fields import ReceptiveField, infer_receptive_fields
 from .regime_detector import CausalRegimeDetector
 from .temporal_memory import DualTimescaleMemory
+from .risk_policy import LightweightRiskPolicy
 from .synaptic_adaptation import SynapticAdaptation
 from .visual_circuit import VisualCircuit
 
@@ -165,6 +168,12 @@ class MaleCNSVisualSystem:
         self.regime_detector = CausalRegimeDetector()
         self.feature_bank = CausalFeatureBank()
         self.temporal_memory = DualTimescaleMemory()
+        self.episodic_memory = BoundedEpisodicMemory()
+        self.risk_policy = LightweightRiskPolicy()
+        self.eligibility = SparseEligibilityTrace()
+        self._previous_policy_action = Prediction.WAIT
+        self._previous_policy_vector: tuple[float, ...] = ()
+        self._previous_policy_regime = "RANGE"
         self.attention = TopDownAttentionModule(
             enabled=not ablate_attention,
         )
@@ -297,6 +306,12 @@ class MaleCNSVisualSystem:
         self.regime_detector.reset()
         self.feature_bank.reset()
         self.temporal_memory.reset()
+        self.episodic_memory.reset(preserve_memory=preserve_learning)
+        self.risk_policy.reset()
+        self.eligibility.reset()
+        self._previous_policy_action = Prediction.WAIT
+        self._previous_policy_vector = ()
+        self._previous_policy_regime = "RANGE"
         self._previous_price = None
         # policy_bias is a short-term homeostatic correction, not a learned
         # context association. Never carry it across an episode/split; the
@@ -311,9 +326,10 @@ class MaleCNSVisualSystem:
         )
 
     def set_learning(self, enabled: bool) -> None:
-        """Enable plasticity for training or freeze it for evaluation."""
+        """Enable plasticity for training or evaluation."""
         self.learning_enabled = enabled
         self.decision_engine.set_learning(enabled)
+        self.episodic_memory.set_learning(enabled)
 
     def _update_policy_bias(self, observed_return_pct: float) -> None:
         if self._previous_action_sign == 0 or abs(observed_return_pct) < 1e-12:
@@ -339,6 +355,10 @@ class MaleCNSVisualSystem:
                     Prediction.UP if observed_ret > 0.0 else Prediction.DOWN if observed_ret < 0.0 else Prediction.WAIT
                 )
                 self.metabolic_control.update_feedback(observed_ret)
+                reward = 1.0 if observed_ret * (1 if self._previous_policy_action == Prediction.UP else -1 if self._previous_policy_action == Prediction.DOWN else 0) > 0 else -1.0
+                self.risk_policy.observe(self._previous_policy_action, reward)
+                self.eligibility.reinforce(reward)
+                self.episodic_memory.add(self._previous_policy_vector, self._previous_policy_action, reward, self._previous_policy_regime)
         if current_price is not None:
             self._previous_price = current_price
 
@@ -357,6 +377,8 @@ class MaleCNSVisualSystem:
         if features is not None:
             memory_signal = max(-1.0, min(1.0, 0.55 * features.short_return + 0.30 * features.medium_return + 0.15 * features.long_return))
             self.temporal_memory.update(memory_signal, features.novelty)
+            active = {index: value for index, value in enumerate(features.values) if abs(value) > 0.25}
+            self.eligibility.step(active)
         drive = self._entry_drive(stimulus)
         self.last_entry_drive = drive
 
@@ -465,6 +487,8 @@ class MaleCNSVisualSystem:
         coherence = self.last_stimulus.coherence if self.last_stimulus else 0.5
         regime_state = self.regime_detector.step(self.last_stimulus, self.last_features) if self.last_stimulus else self.regime_detector.state
         memory_state = self.temporal_memory.state
+        if st.feature_vector:
+            st.feature_novelty = self.episodic_memory.novelty(st.feature_vector)
 
         # 1. Top-Down Attention Step
         att_state = self.attention.step(
@@ -583,9 +607,29 @@ class MaleCNSVisualSystem:
             minimum_confidence=minimum_confidence,
             metabolic_modifier=meta_state.threshold_modifier,
         )
+        risk_action = self.risk_policy.before_action(decision.action, st.feature_novelty)
+        if risk_action != decision.action:
+            decision = DecoupledDecision(
+                action=Prediction.WAIT,
+                reason=DecisionReason.WAIT_RISK_POLICY,
+                up_score=decision.up_score,
+                down_score=decision.down_score,
+                confidence=decision.confidence,
+                wait=True,
+                conflict=decision.conflict,
+                uncertainty=decision.uncertainty,
+                temporal_consistency=decision.temporal_consistency,
+                p_wait=decision.p_wait,
+                p_up=decision.p_up,
+                p_down=decision.p_down,
+                regime=decision.regime,
+            )
         self.last_decoupled_decision = decision
         st.conflict = decision.conflict
         st.temporal_consistency = decision.temporal_consistency
+        self._previous_policy_action = decision.action
+        self._previous_policy_vector = st.feature_vector
+        self._previous_policy_regime = st.regime
 
         return VisualDecision(
             up_score=decision.up_score,
