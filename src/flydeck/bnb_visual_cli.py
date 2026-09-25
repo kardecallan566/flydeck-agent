@@ -47,10 +47,19 @@ def main() -> int:
             print(f"max drawdown: {result.max_drawdown:.4%}")
             print(f"volatility: {result.volatility:.6f}")
             print(f"sharpe-like: {result.sharpe_like:.4f}")
+            print(f"return/max drawdown: {result.economic.return_over_drawdown:.4f}")
+            print(f"CVaR 95%/99%: {result.economic.cvar_95:.6f}/{result.economic.cvar_99:.6f}")
+            print(f"profit factor: {result.economic.profit_factor:.4f}")
+            print(f"ruin probability: {result.economic.ruin_probability:.4%}")
+            print(f"recovery periods: {result.economic.recovery_periods}")
+            print(f"turnover: {result.economic.turnover:.4f}")
+            print(f"total cost: {result.economic.total_cost:.6f}")
             print(f"hit rate: {result.hit_rate:.3%}")
             print(f"average position: {result.average_position:.4f}")
             print(f"average horizon: {result.average_horizon:.2f} candles")
             print(f"labels UP/DOWN/WAIT: {result.labels_up}/{result.labels_down}/{result.labels_wait}")
+            print(f"temporal matches: {result.temporal_matches}")
+            print(f"temporal attention: {result.temporal_attention:.4f}")
         return 0
     if args.survival:
         _agent, result = train_visual_survival(

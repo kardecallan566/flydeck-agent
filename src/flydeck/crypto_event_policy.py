@@ -69,16 +69,22 @@ class CryptoEventPolicy:
 
     def decide(self, decision: VisualDecision, *, fast_memory: float = 0.0,
                slow_memory: float = 0.0, uncertainty: float = 0.0,
-               novelty: float = 0.0, regime: str = "RANGE") -> CryptoEventAction:
+               novelty: float = 0.0, regime: str = "RANGE",
+               temporal_up: float = 0.0, temporal_down: float = 0.0,
+               temporal_flat: float = 0.0, temporal_attention: float = 0.0) -> CryptoEventAction:
         directional_mass = max(0.0, min(1.0, decision.p_up + decision.p_down))
         direction = max(-1.0, min(1.0, decision.p_up - decision.p_down))
         score_direction = max(-1.0, min(1.0, decision.up_score - decision.down_score))
-        direction = max(-1.0, min(1.0, 0.65 * direction + 0.35 * score_direction))
+        temporal_direction = max(-1.0, min(1.0, temporal_up - temporal_down))
+        temporal_weight = min(0.30, max(0.0, temporal_attention) * 0.30)
+        direction = max(-1.0, min(1.0, (1.0 - temporal_weight) * (0.65 * direction + 0.35 * score_direction)
+                         + temporal_weight * temporal_direction))
         # P(WAIT) is not directional confidence. Counting it here previously
         # created large positions while the multiclass head was abstaining.
         confidence = max(0.0, min(1.0, directional_mass * (0.5 + 0.5 * abs(direction))))
         coherence = max(0.0, min(1.0, 1.0 - abs(fast_memory - slow_memory)))
-        risk = max(0.0, min(1.0, 0.55 * uncertainty + 0.25 * novelty + 0.20 * (1.0 - coherence)))
+        risk = max(0.0, min(1.0, 0.45 * uncertainty + 0.20 * novelty + 0.15 * (1.0 - coherence)
+                            + 0.20 * temporal_flat * temporal_attention))
         if regime == "SHOCK":
             risk = min(1.0, risk + 0.20)
         # Continuous exposure: no binary veto, only a smooth risk/uncertainty shrinkage.
