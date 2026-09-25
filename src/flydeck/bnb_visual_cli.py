@@ -64,6 +64,7 @@ def main() -> int:
         print(f"regimes: {dict(metrics.regimes)}")
         for regime, regime_rounds, entries, accuracy, brier, ece in metrics.regime_metrics:
             print(f"  {regime}: rounds={regime_rounds} entered={entries} accuracy={accuracy:.3%} brier={brier:.6f} ece={ece:.6f}")
+        print(f"wait reasons: {dict(metrics.wait_reasons)}")
         print(f"UP/DOWN/WAIT: {metrics.up}/{metrics.down}/{metrics.wait}")
     return 0
 

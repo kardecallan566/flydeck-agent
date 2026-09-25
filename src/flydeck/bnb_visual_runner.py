@@ -23,6 +23,7 @@ class VisualMetrics:
     regimes: tuple[tuple[str, int], ...]
     # regime, rounds, entries, accuracy, brier, ece
     regime_metrics: tuple[tuple[str, int, int, float, float, float], ...]
+    wait_reasons: tuple[tuple[str, int], ...]
 
 
 def run_visual_benchmark(data: BNBPredictionDataset, circuit: VisualCircuit,
@@ -54,6 +55,7 @@ def _split(agent: FlyVisualPredictionAgent, data: BNBPredictionDataset,
     regime_correct: dict[str, int] = {}
     regime_brier: dict[str, float] = {}
     regime_calibration: dict[str, list[tuple[float, int]]] = {}
+    wait_reasons: dict[str, int] = {}
 
     for index in range(start, end):
         prices = data.closes[max(0, index - context + 1): index + 1]
@@ -65,6 +67,8 @@ def _split(agent: FlyVisualPredictionAgent, data: BNBPredictionDataset,
         regime_calibration.setdefault(regime, [])
         if decision.wait:
             wait += 1
+            reason = str(decision.reason)
+            wait_reasons[reason] = wait_reasons.get(reason, 0) + 1
             continue
 
         entered += 1
@@ -108,6 +112,7 @@ def _split(agent: FlyVisualPredictionAgent, data: BNBPredictionDataset,
         expected_calibration_error=_expected_calibration_error(calibration),
         regimes=tuple(sorted(regime_counts.items())),
         regime_metrics=regime_metrics,
+        wait_reasons=tuple(sorted(wait_reasons.items())),
     )
 
 
