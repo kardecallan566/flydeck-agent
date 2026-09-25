@@ -28,3 +28,22 @@ def test_risk_policy_cooldown_is_separate_from_neural_learning() -> None:
     policy.observe(Prediction.UP, -1.0)
     assert policy.before_action(Prediction.DOWN) == Prediction.WAIT
     assert policy.state.cooldown > 0
+
+
+def test_novelty_is_soft_and_does_not_veto_a_direction() -> None:
+    policy = LightweightRiskPolicy()
+    assert policy.before_action(Prediction.UP, novelty=1.0) == Prediction.UP
+
+
+def test_shock_requires_multiple_confirming_candles() -> None:
+    from flydeck.market_retina import RetinaStimulus
+    from flydeck.regime_detector import CausalRegimeDetector, MarketRegime
+
+    field = ((0.0,),)
+    stimulus = RetinaStimulus(field, field, (0.0, 0.0, 0.0, 0.0), 0.9, 1.0, 2.0, 3.0, 0.2, 1.0, 0.9)
+    detector = CausalRegimeDetector(shock_enter_score=0.5, shock_confirmation_candles=3)
+    first = detector.step(stimulus)
+    second = detector.step(stimulus)
+    assert first.regime != MarketRegime.SHOCK
+    assert second.regime != MarketRegime.SHOCK
+    assert detector.step(stimulus).regime == MarketRegime.SHOCK

@@ -32,7 +32,8 @@ class CausalRegimeDetector:
 
     def __init__(self, trend_alpha: float = 0.12, volatility_alpha: float = 0.10,
                  trend_threshold: float = 0.045, persistence_threshold: float = 0.25,
-                 enter_threshold: float = 0.55, exit_threshold: float = 0.38) -> None:
+                 enter_threshold: float = 0.55, exit_threshold: float = 0.38,
+                 shock_enter_score: float = 0.65, shock_confirmation_candles: int = 3) -> None:
         if not 0.0 < trend_alpha <= 1.0 or not 0.0 < volatility_alpha <= 1.0:
             raise ValueError("regime EMA alphas must be in (0, 1]")
         if not 0.0 < exit_threshold < enter_threshold <= 1.0:
@@ -43,9 +44,12 @@ class CausalRegimeDetector:
         self.persistence_threshold = persistence_threshold
         self.enter_threshold = enter_threshold
         self.exit_threshold = exit_threshold
+        self.shock_enter_score = shock_enter_score
+        self.shock_confirmation_candles = shock_confirmation_candles
         self._trend_ema = 0.0
         self._volatility_ema = 0.0
         self._previous_velocity = 0.0
+        self._shock_streak = 0
         self._state = RegimeState(MarketRegime.RANGE, 0.0, 0.0, 0.0, 0.0)
 
     @property
@@ -56,6 +60,7 @@ class CausalRegimeDetector:
         self._trend_ema = 0.0
         self._volatility_ema = 0.0
         self._previous_velocity = 0.0
+        self._shock_streak = 0
         self._state = RegimeState(MarketRegime.RANGE, 0.0, 0.0, 0.0, 0.0)
 
     def step(self, stimulus: RetinaStimulus, features: CausalFeatureVector | None = None) -> RegimeState:
@@ -75,19 +80,24 @@ class CausalRegimeDetector:
         self._volatility_ema = (1.0 - self.volatility_alpha) * self._volatility_ema + self.volatility_alpha * volatility
         acceleration_jump = abs(velocity - self._previous_velocity)
         self._previous_velocity = velocity
-        shock_score = max(
+        shock_candidate = max(
             min(1.0, abs(acceleration)) * 0.45,
             min(1.0, abs(velocity)) * 0.25 + self._volatility_ema * 0.30 + min(1.0, volume_signal) * 0.25,
             min(1.0, acceleration_jump) * 0.55 + self._volatility_ema * 0.25,
         )
+        if shock_candidate >= self.shock_enter_score:
+            self._shock_streak += 1
+        else:
+            self._shock_streak = 0
+        shock_score = shock_candidate if self._shock_streak >= self.shock_confirmation_candles else shock_candidate * 0.20
+
         trend_score = max(-1.0, min(1.0, self._trend_ema * (0.55 + 0.45 * persistence)))
-        trend_strength = abs(trend_score) * (0.70 + 0.30 * persistence)
         range_strength = max(0.0, 1.0 - abs(trend_score)) * max(0.05, 1.0 - 0.70 * persistence)
         raw = (
             max(0.0, trend_score) * (0.70 + 0.30 * persistence),
             max(0.0, -trend_score) * (0.70 + 0.30 * persistence),
             range_strength,
-            shock_score,
+            shock_score * (1.25 if self._shock_streak >= self.shock_confirmation_candles else 1.0),
         )
         total = sum(math.exp(min(8.0, value * 4.0)) for value in raw)
         probabilities = tuple(math.exp(min(8.0, value * 4.0)) / total for value in raw)

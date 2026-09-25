@@ -27,7 +27,7 @@ class ActionProbabilities:
 class ActionProbabilityHead:
     """Tiny non-neural readout separated from the MaleCNS connectome."""
 
-    def __init__(self, learning_rate: float = 0.002, initial_temperature: float = 2.0) -> None:
+    def __init__(self, learning_rate: float = 0.002, initial_temperature: float = 1.25) -> None:
         if learning_rate <= 0.0 or initial_temperature <= 0.0:
             raise ValueError("invalid action-head parameters")
         self.learning_rate = learning_rate
@@ -58,12 +58,12 @@ class ActionProbabilityHead:
                 uncertainty: float = 0.0, novelty: float = 0.0) -> ActionProbabilities:
         # The head receives compact evidence, not the 30K-neuron state.
         logits = (
-            wait_score + 0.20 * uncertainty + 0.10 * novelty,
+            0.70 * wait_score + 0.12 * uncertainty + 0.04 * novelty,
             up_score,
             down_score,
         )
         self._last_logits = logits
-        temperature = self.temperature * 0.35
+        temperature = self.temperature * 0.30
         scaled = [value / max(1e-6, temperature) for value in logits]
         peak = max(scaled)
         exps = [math.exp(min(20.0, value - peak)) for value in scaled]
@@ -76,7 +76,7 @@ class ActionProbabilityHead:
         if not self.learning_enabled or self._last_logits is None:
             return
         target = int(outcome)
-        temperature = self.temperature * 0.35
+        temperature = self.temperature * 0.30
         scaled = [value / max(1e-6, temperature) for value in self._last_logits]
         peak = max(scaled)
         exps = [math.exp(min(20.0, value - peak)) for value in scaled]

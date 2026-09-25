@@ -17,8 +17,8 @@ class RiskState:
 class LightweightRiskPolicy:
     """Deterministic policy overlay; it does not modify MaleCNS synapses."""
 
-    def __init__(self, max_consecutive_losses: int = 4, cooldown_rounds: int = 3,
-                 max_drawdown: float = 0.05) -> None:
+    def __init__(self, max_consecutive_losses: int = 6, cooldown_rounds: int = 2,
+                 max_drawdown: float = 0.12) -> None:
         self.max_consecutive_losses = max_consecutive_losses
         self.cooldown_rounds = cooldown_rounds
         self.max_drawdown = max_drawdown
@@ -36,8 +36,8 @@ class LightweightRiskPolicy:
         self._state = RiskState(self._state.consecutive_losses, max(0, self._state.cooldown - 1), self._state.drawdown, novelty, self._modifier(novelty))
         if action != Prediction.WAIT and (self._state.cooldown > 0 or self._state.drawdown >= self.max_drawdown):
             return Prediction.WAIT
-        if action != Prediction.WAIT and novelty >= 0.85:
-            return Prediction.WAIT
+        # Novelty is a soft risk modifier only. It must never be an absolute
+        # entry veto; otherwise normal regime transitions collapse to WAIT.
         return action
 
     def observe(self, action: Prediction, reward: float) -> None:

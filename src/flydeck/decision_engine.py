@@ -56,8 +56,8 @@ class DynamicDecisionEngine:
         self.wait_value_cap = 0.20
         self.wait_decision_margin = 0.10
         self.action_head = ActionProbabilityHead()
-        self.minimum_direction_probability = 0.40
-        self.minimum_directional_margin = 0.08
+        self.minimum_direction_probability = 0.36
+        self.minimum_directional_margin = 0.04
 
     def reset(self, preserve_learning: bool = False) -> None:
         self._recent_evidence_history.clear()
@@ -143,7 +143,7 @@ class DynamicDecisionEngine:
 
         if state.is_shock or state.regime == "SHOCK":
             return self._wait(DecisionReason.WAIT_REGIME_SHOCK, up_score, down_score, confidence, conflict_val, state, temporal_consistency, p_wait, p_up, p_down)
-        if p_neutral > 0.60 and confidence < 0.12:
+        if p_neutral > 0.78 and confidence < 0.08:
             return self._wait(DecisionReason.WAIT_NEUTRAL_REGIME, up_score, down_score, confidence, conflict_val, state, temporal_consistency, p_wait, p_up, p_down)
         if conflict_val >= self.max_conflict_tolerance:
             return self._wait(DecisionReason.WAIT_HIGH_CONFLICT, up_score, down_score, confidence, conflict_val, state, temporal_consistency, p_wait, p_up, p_down)
