@@ -182,3 +182,6 @@ data/malecns/*.json
 data/checkpoints/live_fly_brain.json
 data/logs/live_diagnostics.jsonl
 testes_flydeck_pancake.csv
+
+# Local benchmark datasets (never commit market data)
+data/cache/*.csv
