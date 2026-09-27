@@ -25,6 +25,18 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--crypto-event", action="store_true", help="evaluate continuous multi-horizon crypto policy")
     parser.add_argument("--ablation", action="store_true", help="compare baseline, MaleCNS+risk and current policy")
+    parser.add_argument("--unsafe-full-ablation", action="store_true",
+                        help="skip the fail-fast preflight (explicit diagnostic escape hatch)")
+    parser.add_argument("--preflight-rounds", type=int, default=1,
+                        help="candles used by the cheap ablation gate")
+    parser.add_argument("--preflight-only", action="store_true",
+                        help="run the smoke gate and stop without the full ablation")
+    parser.add_argument("--runtime-smoke", action="store_true",
+                        help="also execute the very expensive MaleCNS runtime smoke")
+    parser.add_argument("--manifest", type=Path, default=None,
+                        help="write hashes, parameters and terminal run status to JSON")
+    parser.add_argument("--allow-regression", action="store_true",
+                        help="do not reject a candidate that materially regresses against baseline")
     parser.add_argument("--fee-bps", type=float, default=5.0)
     parser.add_argument("--slippage-bps", type=float, default=2.0)
     args = parser.parse_args()
@@ -33,13 +45,37 @@ def main() -> int:
     circuit = VisualCircuit.load(args.circuit)
     if args.ablation:
         from .crypto_event_policy import CryptoEventConfig
-        rows = run_ablation_matrix(data, circuit, config=CryptoEventConfig(fee_bps=args.fee_bps, slippage_bps=args.slippage_bps))
+        config = CryptoEventConfig(fee_bps=args.fee_bps, slippage_bps=args.slippage_bps)
         print("FlyDeck visual agent - ABLATION MATRIX")
         print("variant\tsplit\taccuracy\thit_rate\tcoverage\teconomic_return\tprofit_factor\tmax_drawdown")
-        for row in rows:
+        def print_row(row):
             m = row.standardized
             e = row.economic
             print(f"{row.variant}\t{row.split}\t{m.accuracy:.3%}\t{m.hit_rate:.3%}\t{m.coverage:.3%}\t{m.economic_return:.4%}\t{e.profit_factor:.4f}\t{e.max_drawdown:.4%}")
+        if args.unsafe_full_ablation:
+            rows = run_ablation_matrix(data, circuit, config=config, on_result=print_row)
+        else:
+            from .validation_harness import FailFastConfig, run_safe_ablation
+            fail_fast = FailFastConfig(
+                preflight_rounds=args.preflight_rounds,
+                allow_regression=args.allow_regression,
+                runtime_smoke=args.runtime_smoke,
+            )
+            preflight, rows = run_safe_ablation(
+                data, circuit, data_path=args.data, circuit_path=args.circuit,
+                config=config, fail_fast=fail_fast, manifest_path=args.manifest,
+                on_result=print_row,
+                run_full=not args.preflight_only,
+            )
+            print(f"preflight rounds: {preflight.rounds}")
+            for gate in preflight.gates:
+                print(f"preflight gate {gate.name}: {'PASS' if gate.passed else 'FAIL'} ({gate.detail})")
+            if not preflight.passed:
+                print("ablation stopped before full dataset: fail-fast gate rejected the run")
+                return 2
+            if args.preflight_only:
+                print("preflight completed: full ablation not started")
+                return 0
         return 0
     if args.crypto_event:
         from .crypto_event_policy import CryptoEventConfig

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Callable
 
 from .bnb_prediction import Prediction
 from .bnb_prediction_data_runner import BNBPredictionDataset
@@ -22,7 +23,8 @@ class AblationResult:
 
 
 def run_ablation_matrix(data: BNBPredictionDataset, circuit: VisualCircuit, *, context: int = 32,
-                        config: CryptoEventConfig | None = None) -> tuple[AblationResult, ...]:
+                        config: CryptoEventConfig | None = None,
+                        on_result: Callable[[AblationResult], None] | None = None) -> tuple[AblationResult, ...]:
     config = config or CryptoEventConfig()
     usable = data.size - max(config.horizons)
     train_end = int(usable * 0.70)
@@ -31,19 +33,34 @@ def run_ablation_matrix(data: BNBPredictionDataset, circuit: VisualCircuit, *, c
     for variant, risk in (("baseline_original", False), ("malecns_risk", True)):
         agent = FlyVisualPredictionAgent(circuit, retina_width=context)
         risk_policy = LightweightRiskPolicy() if risk else None
-        rows.extend(_run_simple_variant(variant, agent, risk_policy, data, context - 1, train_end, context, "TRAIN", config))
+        new_rows = _run_simple_variant(variant, agent, risk_policy, data, context - 1, train_end, context, "TRAIN", config)
+        rows.extend(new_rows)
+        if on_result:
+            for row in new_rows:
+                on_result(row)
         agent.set_learning(False)
         agent.reset(preserve_learning=True)
         if risk_policy:
             risk_policy.reset()
-        rows.extend(_run_simple_variant(variant, agent, risk_policy, data, train_end, validation_end, context, "VALIDATION", config))
+        new_rows = _run_simple_variant(variant, agent, risk_policy, data, train_end, validation_end, context, "VALIDATION", config)
+        rows.extend(new_rows)
+        if on_result:
+            for row in new_rows:
+                on_result(row)
         agent.reset(preserve_learning=True)
         if risk_policy:
             risk_policy.reset()
-        rows.extend(_run_simple_variant(variant, agent, risk_policy, data, validation_end, usable, context, "TEST", config))
+        new_rows = _run_simple_variant(variant, agent, risk_policy, data, validation_end, usable, context, "TEST", config)
+        rows.extend(new_rows)
+        if on_result:
+            for row in new_rows:
+                on_result(row)
     current = run_crypto_event_benchmark(data, circuit, context=context, config=config)
     for split, metrics in zip(("TRAIN", "VALIDATION", "TEST"), current):
-        rows.append(_from_current(split, metrics))
+        row = _from_current(split, metrics)
+        rows.append(row)
+        if on_result:
+            on_result(row)
     return tuple(rows)
 
 
