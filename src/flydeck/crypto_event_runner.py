@@ -8,6 +8,7 @@ from .crypto_event_policy import CryptoEventConfig, CryptoEventLabeler, CryptoEv
 from .economic_metrics import EconomicSurvivalMetrics, calculate_economic_survival_metrics
 from .temporal_events import TemporalEventExtractor
 from .temporal_memory import SparseTemporalMemory
+from .standard_metrics import standardize_metrics
 from .visual_agent import FlyVisualPredictionAgent
 from .visual_circuit import VisualCircuit
 
@@ -23,6 +24,8 @@ class CryptoEventMetrics:
     max_drawdown: float
     volatility: float
     sharpe_like: float
+    accuracy: float
+    coverage: float
     hit_rate: float
     average_position: float
     average_horizon: float
@@ -71,7 +74,7 @@ def _split(agent: FlyVisualPredictionAgent, policy: CryptoEventPolicy, labeler: 
     positions: list[float] = []
     horizons: list[int] = []
     labels = {Prediction.UP: 0, Prediction.DOWN: 0, Prediction.WAIT: 0}
-    signals = positive = negative = flat = hits = matches = 0
+    signals = positive = negative = flat = correct = profitable = matches = 0
     attention_total = 0.0
     previous_position = 0.0
     for index in range(start, end):
@@ -94,6 +97,7 @@ def _split(agent: FlyVisualPredictionAgent, policy: CryptoEventPolicy, labeler: 
         turnover = abs(action.position - previous_position)
         trade_cost = turnover * labeler.config.round_trip_cost
         net_return = action.position * realized - trade_cost
+        profitable += int(net_return > 0.0 and abs(action.position) >= 0.05)
         returns.append(net_return)
         costs.append(trade_cost)
         positions.append(action.position)
@@ -106,20 +110,24 @@ def _split(agent: FlyVisualPredictionAgent, policy: CryptoEventPolicy, labeler: 
         elif action.position > 0.0:
             positive += 1
             signals += 1
-            hits += int(realized > labeler.config.round_trip_cost)
+            correct += int(realized > labeler.config.round_trip_cost)
         else:
             negative += 1
             signals += 1
-            hits += int(realized < -labeler.config.round_trip_cost)
+            correct += int(realized < -labeler.config.round_trip_cost)
         if learn:
             # This reward is applied only after the selected future horizon is known.
             memory.add(event, label, max(-1.0, min(1.0, net_return * 100.0)))
     economic = calculate_economic_survival_metrics(returns, positions, costs=costs)
+    standardized = standardize_metrics(rounds=end - start, entered=signals, correct=correct,
+                                        profitable=profitable,
+                                        net_returns=returns)
     return CryptoEventMetrics(
         rounds=end - start, signals=signals, positive_signals=positive, negative_signals=negative,
         flat_signals=flat, total_return=economic.net_return, max_drawdown=economic.max_drawdown,
         volatility=economic.volatility,
-        sharpe_like=economic.sharpe_net, hit_rate=hits / signals if signals else 0.0,
+        sharpe_like=economic.sharpe_net, accuracy=standardized.accuracy,
+        coverage=standardized.coverage, hit_rate=standardized.hit_rate,
         average_position=economic.average_exposure,
         average_horizon=sum(horizons) / len(horizons) if horizons else 0.0,
         labels_up=labels[Prediction.UP], labels_down=labels[Prediction.DOWN], labels_wait=labels[Prediction.WAIT],

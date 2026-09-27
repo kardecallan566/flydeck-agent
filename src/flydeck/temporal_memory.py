@@ -61,13 +61,14 @@ class SparseTemporalMemory:
     """Bounded associative memory that stores only salient causal events."""
 
     def __init__(self, capacity: int = 512, top_k: int = 8, decay: float = 0.985,
-                 novelty_threshold: float = 0.10) -> None:
+                 novelty_threshold: float = 0.03, long_term_floor: float = 0.10) -> None:
         if capacity < 8 or top_k < 1 or not 0.0 < decay <= 1.0:
             raise ValueError("invalid temporal memory parameters")
         self.capacity = capacity
         self.top_k = top_k
         self.decay = decay
         self.novelty_threshold = novelty_threshold
+        self.long_term_floor = max(0.0, min(1.0, long_term_floor))
         self._entries: deque[_MemoryEntry] = deque(maxlen=capacity)
 
     @property
@@ -88,7 +89,10 @@ class SparseTemporalMemory:
         for entry in self._entries:
             similarity = self._similarity(query.state, entry.event.state)
             age = max(0, query.timestamp - entry.event.timestamp)
-            age_weight = self.decay ** min(age, 10_000)
+            # The previous exponent ran over the absolute train/test gap and
+            # underflowed to zero. Keep a small long-term trace so frozen
+            # validation/test memory can still retrieve train events.
+            age_weight = max(self.long_term_floor, self.decay ** min(age, 500))
             regime_weight = 1.15 if entry.event.regime == query.regime else 0.75
             score = max(0.0, similarity) * max(0.05, entry.event.intensity) * age_weight * regime_weight
             if score >= self.novelty_threshold:

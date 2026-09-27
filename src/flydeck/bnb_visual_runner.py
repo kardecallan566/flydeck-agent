@@ -6,6 +6,7 @@ from .bnb_prediction import Prediction
 from .bnb_prediction_data_runner import BNBPredictionDataset
 from .visual_agent import FlyVisualPredictionAgent
 from .visual_circuit import VisualCircuit
+from .standard_metrics import standardize_metrics
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,12 +111,14 @@ def _split(agent: FlyVisualPredictionAgent, data: BNBPredictionDataset,
          _expected_calibration_error(regime_calibration[regime]))
         for regime in sorted(regime_counts)
     )
+    standardized = standardize_metrics(rounds=rounds, entered=entered, correct=correct,
+                                        profitable=correct)
     return VisualMetrics(
         rounds=rounds,
         entered=entered,
         correct=correct,
-        accuracy=correct / entered if entered else 0.0,
-        coverage=entered / rounds if rounds else 0.0,
+        accuracy=standardized.accuracy,
+        coverage=standardized.coverage,
         up=up,
         down=down,
         wait=wait,

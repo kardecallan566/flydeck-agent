@@ -6,6 +6,7 @@ from pathlib import Path
 from .bnb_prediction_data_runner import load_bnb_5m_csv
 from .bnb_visual_runner import run_visual_benchmark
 from .crypto_event_runner import run_crypto_event_benchmark
+from .ablation_runner import run_ablation_matrix
 from .survival_training import train_visual_survival
 from .visual_circuit import VisualCircuit
 
@@ -23,12 +24,23 @@ def main() -> int:
     parser.add_argument("--wait-streak", type=int, default=8, help="force a directional probe after this many WAITs")
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--crypto-event", action="store_true", help="evaluate continuous multi-horizon crypto policy")
+    parser.add_argument("--ablation", action="store_true", help="compare baseline, MaleCNS+risk and current policy")
     parser.add_argument("--fee-bps", type=float, default=5.0)
     parser.add_argument("--slippage-bps", type=float, default=2.0)
     args = parser.parse_args()
 
     data = load_bnb_5m_csv(args.data)
     circuit = VisualCircuit.load(args.circuit)
+    if args.ablation:
+        from .crypto_event_policy import CryptoEventConfig
+        rows = run_ablation_matrix(data, circuit, config=CryptoEventConfig(fee_bps=args.fee_bps, slippage_bps=args.slippage_bps))
+        print("FlyDeck visual agent - ABLATION MATRIX")
+        print("variant\tsplit\taccuracy\thit_rate\tcoverage\teconomic_return\tprofit_factor\tmax_drawdown")
+        for row in rows:
+            m = row.standardized
+            e = row.economic
+            print(f"{row.variant}\t{row.split}\t{m.accuracy:.3%}\t{m.hit_rate:.3%}\t{m.coverage:.3%}\t{m.economic_return:.4%}\t{e.profit_factor:.4f}\t{e.max_drawdown:.4%}")
+        return 0
     if args.crypto_event:
         from .crypto_event_policy import CryptoEventConfig
         metrics = run_crypto_event_benchmark(
@@ -47,6 +59,8 @@ def main() -> int:
             print(f"max drawdown: {result.max_drawdown:.4%}")
             print(f"volatility: {result.volatility:.6f}")
             print(f"sharpe-like: {result.sharpe_like:.4f}")
+            print(f"accuracy: {result.accuracy:.3%}")
+            print(f"coverage: {result.coverage:.3%}")
             print(f"return/max drawdown: {result.economic.return_over_drawdown:.4f}")
             print(f"CVaR 95%/99%: {result.economic.cvar_95:.6f}/{result.economic.cvar_99:.6f}")
             print(f"profit factor: {result.economic.profit_factor:.4f}")
