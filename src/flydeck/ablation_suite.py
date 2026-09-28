@@ -66,6 +66,24 @@ def run_ablation_suite(
         ("Ablation: No Spatial Offset (Collapsed)", {"ablate_spatial": True}),
         ("Ablation: No Mushroom Body Memory", {"ablate_mushroom_body": True}),
         ("Ablation: No Predictive Coding Loop", {"ablate_predictive_coding": True}),
+        (
+            "Ablation: No Attention/GF/Metabolic",
+            {"ablate_attention": True, "ablate_giant_fiber": True, "ablate_metabolic": True},
+        ),
+        (
+            "Ablation: Visual Core Only",
+            {
+                "ablate_adaptation": True,
+                "ablate_working_memory": True,
+                "ablate_neuromodulation": True,
+                "ablate_conflict_engine": True,
+                "ablate_mushroom_body": True,
+                "ablate_predictive_coding": True,
+                "ablate_attention": True,
+                "ablate_giant_fiber": True,
+                "ablate_metabolic": True,
+            },
+        ),
     )
 
     results: list[AblationResult] = []

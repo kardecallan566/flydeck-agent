@@ -120,7 +120,7 @@ def test_ablation_suite_runs_on_toy_circuit() -> None:
         context=4,
         confidence_threshold=0.0,
     )
-    assert len(results) == 10
+    assert len(results) == 12
     assert "Full Model" in results[0].variant_name
     assert any("LPTC" in r.variant_name for r in results)
     assert any("Central Complex" in r.variant_name for r in results)
@@ -131,6 +131,8 @@ def test_ablation_suite_runs_on_toy_circuit() -> None:
     assert any("Spatial" in r.variant_name for r in results)
     assert any("Mushroom Body" in r.variant_name for r in results)
     assert any("Predictive Coding" in r.variant_name for r in results)
+    assert any("Attention/GF/Metabolic" in r.variant_name for r in results)
+    assert any("Visual Core Only" in r.variant_name for r in results)
 
 
 def test_multi_evidence_decision_produces_coverage() -> None:
