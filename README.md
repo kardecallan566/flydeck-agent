@@ -77,8 +77,7 @@ Download settled round structs through a read-only BNB Chain JSON-RPC endpoint:
 ```bash
 flydeck-pancake-rounds \\
   --rpc-url YOUR_BNB_RPC_URL \\
-  --start-epoch START_EPOCH \\
-  --end-epoch END_EPOCH \\
+  --last 75000 \\
   --output data/cache/pancake_bnb_rounds.csv
 ```
 
