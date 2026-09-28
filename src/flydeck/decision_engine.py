@@ -141,6 +141,22 @@ class DynamicDecisionEngine:
         )
         p_wait, p_up, p_down = probabilities.as_tuple()
 
+        # Scientific ablation: disabling the decision engine must actually remove
+        # abstention/conflict/uncertainty gates. Previously the enabled flag was
+        # stored but never consulted, making the "No Conflict WAIT Engine" ablation
+        # indistinguishable from the full model.
+        if not self.enabled:
+            if up_score == down_score:
+                action = Prediction.UP if p_up >= p_down else Prediction.DOWN
+            else:
+                action = Prediction.UP if up_score > down_score else Prediction.DOWN
+            reason = DecisionReason.COMMIT_UP if action == Prediction.UP else DecisionReason.COMMIT_DOWN
+            return DecoupledDecision(
+                action, reason, up_score, down_score, confidence, False,
+                conflict_val, state.uncertainty, temporal_consistency,
+                p_wait, p_up, p_down, state.regime,
+            )
+
         if state.is_shock or state.regime == "SHOCK":
             return self._wait(DecisionReason.WAIT_REGIME_SHOCK, up_score, down_score, confidence, conflict_val, state, temporal_consistency, p_wait, p_up, p_down)
         if p_neutral > 0.78 and confidence < 0.08:

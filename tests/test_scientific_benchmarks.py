@@ -69,11 +69,13 @@ def test_confusion_matrix_metrics() -> None:
     assert cm.coverage == 0.90
     assert cm.precision_up == 40 / 50
     assert cm.precision_down == 30 / 40
-    # PancakeSwap expectancy: acc * 0.97 - (1 - acc) * 1.0
+    # Balanced-pool scenario: 2x gross payout, then 3% treasury fee.
+    # Winning unit stake net profit = 2 * 0.97 - 1 = 0.94.
     acc = 70 / 90
-    expected_edge = acc * 0.97 - (1.0 - acc)
-    assert abs(cm.pancakeswap_expectancy(0.03) - expected_edge) < 1e-6
+    expected_edge = acc * 0.94 - (1.0 - acc)
+    assert abs(cm.pancakeswap_expectancy(0.03, payout_ratio=2.0) - expected_edge) < 1e-6
     assert cm.pancakeswap_expectancy() > 0.0
+    assert abs(cm.pancakeswap_break_even_accuracy() - (1.0 / 1.94)) < 1e-6
 
 
 def test_baselines_execute_consistently() -> None:
@@ -118,7 +120,7 @@ def test_ablation_suite_runs_on_toy_circuit() -> None:
         context=4,
         confidence_threshold=0.0,
     )
-    assert len(results) == 10
+    assert len(results) == 12
     assert "Full Model" in results[0].variant_name
     assert any("LPTC" in r.variant_name for r in results)
     assert any("Central Complex" in r.variant_name for r in results)
@@ -129,6 +131,8 @@ def test_ablation_suite_runs_on_toy_circuit() -> None:
     assert any("Spatial" in r.variant_name for r in results)
     assert any("Mushroom Body" in r.variant_name for r in results)
     assert any("Predictive Coding" in r.variant_name for r in results)
+    assert any("Attention/GF/Metabolic" in r.variant_name for r in results)
+    assert any("Visual Core Only" in r.variant_name for r in results)
 
 
 def test_multi_evidence_decision_produces_coverage() -> None:

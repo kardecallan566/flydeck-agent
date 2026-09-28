@@ -46,6 +46,18 @@ def test_checkpoint_round_trip(tmp_path: Path) -> None:
     agent.visual.mushroom_body._mbon_weights_np[10] = 1.234
     agent.visual.central_complex._attractor_heading = 0.567
     agent.visual.predictive_coding._current_expectation = -0.432
+    agent.visual._previous_price = 105.0
+    agent.visual.policy_bias = 0.075
+    agent.visual._previous_action_sign = 1
+    agent.visual._previous_policy_action = Prediction.UP
+    agent.visual._previous_policy_vector = (0.1, -0.2, 0.3)
+    agent.visual._previous_policy_regime = "TREND_UP"
+    agent.visual.eligibility._values = {3: 0.75, 9: -0.25}
+    agent.visual.risk_policy.observe(Prediction.DOWN, -1.0)
+    agent.visual.temporal_memory.update(0.4, novelty=0.2)
+    agent.visual.episodic_memory.add((0.1, 0.2), Prediction.UP, 1.0, "TREND_UP")
+    agent.visual.internal_state.arousal = 0.77
+    agent.visual.internal_state.hypothesis_probs = (0.6, 0.3, 0.1)
 
     ckpt_file = tmp_path / "fly_brain.json"
     metadata = {"round": 42, "pnl": 12.5}
@@ -64,3 +76,15 @@ def test_checkpoint_round_trip(tmp_path: Path) -> None:
     assert abs(fresh_agent.visual.mushroom_body._mbon_weights_np[10] - 1.234) < 1e-5
     assert abs(fresh_agent.visual.central_complex._attractor_heading - 0.567) < 1e-5
     assert abs(fresh_agent.visual.predictive_coding._current_expectation - (-0.432)) < 1e-5
+    assert fresh_agent.visual._previous_price == 105.0
+    assert abs(fresh_agent.visual.policy_bias - 0.075) < 1e-9
+    assert fresh_agent.visual._previous_action_sign == 1
+    assert fresh_agent.visual._previous_policy_action == Prediction.UP
+    assert fresh_agent.visual._previous_policy_vector == (0.1, -0.2, 0.3)
+    assert fresh_agent.visual._previous_policy_regime == "TREND_UP"
+    assert fresh_agent.visual.eligibility.values == {3: 0.75, 9: -0.25}
+    assert fresh_agent.visual.risk_policy.state.consecutive_losses == 1
+    assert abs(fresh_agent.visual.temporal_memory.state.fast - agent.visual.temporal_memory.state.fast) < 1e-9
+    assert fresh_agent.visual.episodic_memory.size == 1
+    assert abs(fresh_agent.visual.internal_state.arousal - 0.77) < 1e-9
+    assert fresh_agent.visual.internal_state.hypothesis_probs == (0.6, 0.3, 0.1)

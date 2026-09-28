@@ -38,7 +38,7 @@ def format_matrix_row(m: ConfusionMatrix) -> str:
 
 def print_comparison_table(title: str, matrices: tuple[ConfusionMatrix, ...]) -> None:
     print(f"\n=== {title} ===")
-    header = f"{'Model / Baseline':<32} | {'Entered/Tot':<11} | {'Cover':>6} | {'Acc':>6} | {'P(UP)':>6} | {'P(DN)':>6} | {'F1':>6} | {'PCS Edge':>8}"
+    header = f"{'Model / Baseline':<32} | {'Entered/Tot':<11} | {'Cover':>6} | {'Acc':>6} | {'P(UP)':>6} | {'P(DN)':>6} | {'F1':>6} | {'PCS Edge@2x':>8}"
     sep = "-" * len(header)
     print(header)
     print(sep)
@@ -126,7 +126,7 @@ def main() -> int:
     print(f"  True UP:    {fly_matrix.true_up:<5} | False UP:   {fly_matrix.false_up:<5}")
     print(f"  True DOWN:  {fly_matrix.true_down:<5} | False DOWN: {fly_matrix.false_down:<5}")
     print(f"  WAITs:      {fly_matrix.waits:<5} (selective abstention rate: {fly_matrix.waits / fly_matrix.total_rounds:.1%})")
-    print(f"  PancakeSwap Net Expectancy per bet: {fly_matrix.pancakeswap_expectancy():+.2%}")
+    print(f"  PancakeSwap scenario EV per bet @ 2x payout: {fly_matrix.pancakeswap_expectancy():+.2%}")
 
     # 5. Systematic Ablation Suite (run on Validation split to avoid test leakage)
     if not args.skip_ablation:
@@ -188,11 +188,11 @@ def main() -> int:
                 opt_test_matrix,
             ))
             opt_edge = opt_test_matrix.pancakeswap_expectancy()
-            print(f"\n  Optimized PCS Edge: {opt_edge:+.2%}")
+            print(f"\n  Optimized PCS Edge@2x: {opt_edge:+.2%}")
             if opt_edge > 0:
-                print("  [+] POSITIVE EXPECTANCY -- agent is viable for PancakeSwap!")
+                print("  [+] Positive 2x payout scenario EV -- not sufficient for live deployment.")
             else:
-                print("  [-] Negative expectancy -- further tuning needed.")
+                print("  [-] Negative 2x payout scenario EV.")
         else:
             print("  No viable parameter sets found (all had coverage < 10%).")
 

@@ -20,7 +20,11 @@ try:
 except ImportError:
     np = None
 
+from .bnb_prediction import Prediction
+from .episodic_memory import Episode
 from .internal_state import AgentInternalState
+from .risk_policy import RiskState
+from .temporal_memory import TemporalMemoryState
 from .visual_agent import FlyVisualPredictionAgent
 
 
@@ -51,10 +55,10 @@ class AgentCheckpointManager:
             action_weights = getattr(mb, "_action_weights_list", None)
             kc_history = list(getattr(mb, "_kc_history_list", []))
 
-        state_dict = vis.internal_state.to_diagnostic_dict()
+        state_dict = asdict(vis.internal_state)
 
         payload: dict[str, Any] = {
-            "version": 1,
+            "version": 2,
             "metadata": metadata or {},
             "mushroom_body": {
                 "mbon_weights": mbon_weights,
@@ -85,6 +89,27 @@ class AgentCheckpointManager:
             "metabolic_control": {
                 "energy": vis.metabolic_control._energy,
             },
+            "runtime": {
+                "previous_price": vis._previous_price,
+                "policy_bias": vis.policy_bias,
+                "previous_action_sign": vis._previous_action_sign,
+                "previous_policy_action": int(vis._previous_policy_action),
+                "previous_policy_vector": list(vis._previous_policy_vector),
+                "previous_policy_regime": vis._previous_policy_regime,
+                "learning_enabled": vis.learning_enabled,
+            },
+            "risk_policy": asdict(vis.risk_policy.state),
+            "eligibility": vis.eligibility.values,
+            "episodic_memory": [
+                {
+                    "vector": list(episode.vector),
+                    "action": int(episode.action),
+                    "reward": episode.reward,
+                    "regime": episode.regime,
+                }
+                for episode in vis.episodic_memory._episodes
+            ],
+            "temporal_memory": asdict(vis.temporal_memory.state),
             "internal_state": state_dict,
         }
 
@@ -183,5 +208,73 @@ class AgentCheckpointManager:
         meta_data = payload.get("metabolic_control", {})
         if "energy" in meta_data:
             vis.metabolic_control._energy = float(meta_data["energy"])
+
+        # Version 2 restores the causal runtime cursor needed to continue
+        # learning after a process restart instead of silently starting a new
+        # episode with old weights.
+        runtime = payload.get("runtime", {})
+        if runtime:
+            previous_price = runtime.get("previous_price")
+            vis._previous_price = float(previous_price) if previous_price is not None else None
+            vis.policy_bias = float(runtime.get("policy_bias", vis.policy_bias))
+            vis._previous_action_sign = int(runtime.get("previous_action_sign", 0))
+            vis._previous_policy_action = Prediction(int(runtime.get("previous_policy_action", 0)))
+            vis._previous_policy_vector = tuple(float(v) for v in runtime.get("previous_policy_vector", ()))
+            vis._previous_policy_regime = str(runtime.get("previous_policy_regime", "RANGE"))
+            vis.set_learning(bool(runtime.get("learning_enabled", True)))
+
+        risk_data = payload.get("risk_policy")
+        if isinstance(risk_data, dict):
+            vis.risk_policy._state = RiskState(
+                consecutive_losses=int(risk_data.get("consecutive_losses", 0)),
+                cooldown=int(risk_data.get("cooldown", 0)),
+                drawdown=float(risk_data.get("drawdown", 0.0)),
+                novelty=float(risk_data.get("novelty", 0.0)),
+                risk_modifier=float(risk_data.get("risk_modifier", 0.0)),
+            )
+
+        eligibility_data = payload.get("eligibility")
+        if isinstance(eligibility_data, dict):
+            vis.eligibility._values = {
+                int(key): float(value) for key, value in eligibility_data.items()
+            }
+
+        episodes = payload.get("episodic_memory")
+        if isinstance(episodes, list):
+            vis.episodic_memory._episodes = [
+                Episode(
+                    vector=tuple(float(value) for value in row.get("vector", ())),
+                    action=Prediction(int(row.get("action", 0))),
+                    reward=float(row.get("reward", 0.0)),
+                    regime=str(row.get("regime", "RANGE")),
+                )
+                for row in episodes
+                if isinstance(row, dict)
+            ][-vis.episodic_memory.capacity :]
+
+        temporal_data = payload.get("temporal_memory")
+        if isinstance(temporal_data, dict):
+            vis.temporal_memory._state = TemporalMemoryState(
+                fast=float(temporal_data.get("fast", 0.0)),
+                slow=float(temporal_data.get("slow", 0.0)),
+                novelty=float(temporal_data.get("novelty", 0.0)),
+            )
+
+        internal_data = payload.get("internal_state")
+        if isinstance(internal_data, dict):
+            tuple_fields = {
+                "mb_action_values",
+                "regime_probabilities",
+                "feature_vector",
+                "hypothesis_probs",
+            }
+            normalized = {
+                key: tuple(value) if key in tuple_fields and isinstance(value, list) else value
+                for key, value in internal_data.items()
+            }
+            allowed = AgentInternalState.__dataclass_fields__
+            vis.internal_state = AgentInternalState(
+                **{key: value for key, value in normalized.items() if key in allowed}
+            )
 
         return payload.get("metadata", {})

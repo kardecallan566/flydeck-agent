@@ -1,8 +1,9 @@
 """Grid search optimizer for FlyDeck Agent hyperparameters.
 
 Searches over key parameters using only the validation split to avoid
-test set leakage. The optimization metric is PancakeSwap net expectancy
-(accuracy * 0.97 - (1 - accuracy)), which accounts for the 3% treasury fee.
+test set leakage. The optimization metric is a balanced-pool PancakeSwap
+scenario proxy (default 2x payout ratio after the 3% treasury fee). Actual
+PancakeSwap EV is pool-dependent and must be computed from round payout data.
 
 To achieve maximum performance, the visual network forward pass is executed
 ONCE to extract sensory traces (directional T4/T5, LPTC wide-field flow,
@@ -239,7 +240,7 @@ def format_optimization_results(results: Sequence[OptimizationResult]) -> str:
     lines = [
         f"{'Rank':<5} | {'Gamma':<6} | {'Beta':<6} | {'Conf':<6} | "
         f"{'W_Dir':<6} | {'W_Vel':<6} | {'W_Bal':<6} | {'W_Trd':<6} | "
-        f"{'Acc':<7} | {'Cov':<7} | {'PCS Edge':<9}",
+        f"{'Acc':<7} | {'Cov':<7} | {'PCS Edge@2x':<9}",
         "-" * 95,
     ]
     for i, r in enumerate(results):
