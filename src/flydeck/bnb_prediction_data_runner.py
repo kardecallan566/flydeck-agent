@@ -20,6 +20,36 @@ class BNBPredictionDataset:
     lows: tuple[float, ...]
     closes: tuple[float, ...]
     volumes: tuple[float, ...]
+    outcome_overrides: tuple[Prediction | None, ...] | None = None
+    target_name: str = "binance-close-t+1"
+
+    def __post_init__(self) -> None:
+        sizes = {len(self.timestamps), len(self.opens), len(self.highs), len(self.lows), len(self.closes), len(self.volumes)}
+        if len(sizes) != 1:
+            raise ValueError("BNB dataset columns must have equal length")
+        if self.outcome_overrides is not None and len(self.outcome_overrides) != self.size:
+            raise ValueError("outcome_overrides must match dataset size")
+
+    @property
+    def uses_external_targets(self) -> bool:
+        return self.outcome_overrides is not None
+
+    def with_outcome_overrides(
+        self,
+        outcomes: tuple[Prediction | None, ...],
+        *,
+        target_name: str,
+    ) -> "BNBPredictionDataset":
+        return BNBPredictionDataset(
+            timestamps=self.timestamps,
+            opens=self.opens,
+            highs=self.highs,
+            lows=self.lows,
+            closes=self.closes,
+            volumes=self.volumes,
+            outcome_overrides=outcomes,
+            target_name=target_name,
+        )
 
     @classmethod
     def from_candles(cls, candles: tuple[MarketCandle, ...]) -> "BNBPredictionDataset":
@@ -49,6 +79,9 @@ class BNBPredictionDataset:
     def outcome(self, index: int) -> Prediction:
         if not 0 <= index < self.size - 1:
             raise IndexError("outcome requires an index with a following candle")
+        if self.outcome_overrides is not None:
+            external = self.outcome_overrides[index]
+            return Prediction.WAIT if external is None else external
         if self.closes[index + 1] > self.closes[index]:
             return Prediction.UP
         if self.closes[index + 1] < self.closes[index]:
