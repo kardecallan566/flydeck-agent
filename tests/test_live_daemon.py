@@ -131,3 +131,57 @@ def test_daemon_triggers_on_action_callback(tmp_path: Path) -> None:
     record = daemon.execute_step()
     assert len(received_actions) == 1
     assert received_actions[0][0] in ("UP", "DOWN", "WAIT")
+
+
+
+def test_daemon_excludes_in_progress_candle(tmp_path: Path) -> None:
+    circuit = _toy_circuit()
+    agent = FlyVisualPredictionAgent(circuit, retina_width=8, retina_height=4)
+    mock_prov = MockProvider(candle_count=40)
+    service = MarketDataService(mock_prov, cache_root=tmp_path / "cache")
+
+    daemon = FlyDeckLiveDaemon(
+        agent=agent,
+        context_window=10,
+        checkpoint_file=tmp_path / "finalized_ckpt.json",
+        diagnostics_file=tmp_path / "finalized_diag.jsonl",
+        service=service,
+    )
+
+    # Candle 39 opened at 11,700s and is still forming at 11,850s.
+    record = daemon.execute_step(current_time=11_850.0)
+    assert record is not None
+    assert record["timestamp"] == 38 * 300_000
+    assert record["candle_close_timestamp"] <= record["evaluation_timestamp"]
+
+
+def test_daemon_restores_cursor_and_does_not_reprocess_checkpointed_candle(tmp_path: Path) -> None:
+    circuit = _toy_circuit()
+    mock_prov = MockProvider(candle_count=40)
+    service = MarketDataService(mock_prov, cache_root=tmp_path / "cache")
+    ckpt_file = tmp_path / "resume_ckpt.json"
+    diag_file = tmp_path / "resume_diag.jsonl"
+
+    first_agent = FlyVisualPredictionAgent(circuit, retina_width=8, retina_height=4)
+    first = FlyDeckLiveDaemon(
+        agent=first_agent,
+        context_window=10,
+        checkpoint_file=ckpt_file,
+        diagnostics_file=diag_file,
+        service=service,
+    )
+    record = first.execute_step(current_time=12_000.0)
+    assert record is not None
+
+    resumed_agent = FlyVisualPredictionAgent(circuit, retina_width=8, retina_height=4)
+    resumed = FlyDeckLiveDaemon(
+        agent=resumed_agent,
+        context_window=10,
+        checkpoint_file=ckpt_file,
+        diagnostics_file=diag_file,
+        service=service,
+    )
+    assert resumed.round_count == 1
+    assert resumed.last_candle_timestamp == record["timestamp"]
+    assert resumed._prev_close == record["close"]
+    assert resumed.execute_step(current_time=12_000.0) is None
