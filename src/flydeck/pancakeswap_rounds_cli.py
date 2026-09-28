@@ -12,7 +12,8 @@ def main() -> int:
     )
     parser.add_argument("--rpc-url", required=True, help="BNB Chain JSON-RPC HTTPS endpoint")
     parser.add_argument("--output", required=True, type=Path, help="Destination CSV")
-    parser.add_argument("--start-epoch", required=True, type=int)
+    parser.add_argument("--start-epoch", type=int)
+    parser.add_argument("--last", type=int, help="Fetch the last N settled epochs")
     parser.add_argument(
         "--end-epoch",
         type=int,
@@ -22,13 +23,21 @@ def main() -> int:
     parser.add_argument("--contract", default=BNB_PREDICTION_CONTRACT)
     args = parser.parse_args()
 
+    if (args.start_epoch is None) == (args.last is None):
+        parser.error("provide exactly one of --start-epoch or --last")
+    if args.last is not None and args.last < 1:
+        parser.error("--last must be positive")
+
     client = PancakeRpcClient(args.rpc_url, contract_address=args.contract)
     end_epoch = args.end_epoch
     if end_epoch is None:
-        end_epoch = max(args.start_epoch, client.current_epoch() - 1)
+        end_epoch = client.current_epoch() - 1
+    start_epoch = args.start_epoch if args.start_epoch is not None else max(0, end_epoch - args.last + 1)
+    if end_epoch < start_epoch:
+        parser.error("--end-epoch must be >= start epoch")
 
-    print(f"Fetching PancakeSwap BNB rounds {args.start_epoch}..{end_epoch}...")
-    rounds = client.fetch_rounds(args.start_epoch, end_epoch, batch_size=args.batch_size)
+    print(f"Fetching PancakeSwap BNB rounds {start_epoch}..{end_epoch}...")
+    rounds = client.fetch_rounds(start_epoch, end_epoch, batch_size=args.batch_size)
     destination = write_pancake_rounds_csv(rounds, args.output)
     settled = sum(row.oracle_called for row in rounds)
     print(f"Saved {len(rounds)} rounds ({settled} oracle-settled) to {destination}")
