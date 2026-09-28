@@ -19,6 +19,7 @@ from typing import Any, Callable
 
 from .checkpoint import AgentCheckpointManager
 from .data import BinanceMarketDataProvider, MarketDataService
+from .data.market_data import interval_to_milliseconds
 from .visual_agent import FlyVisualPredictionAgent
 from .visual_circuit import VisualCircuit
 
@@ -59,8 +60,15 @@ class FlyDeckLiveDaemon:
         if self.checkpoint_file.exists():
             try:
                 meta = AgentCheckpointManager.load(self.agent, self.checkpoint_file)
-                self.round_count = meta.get("round_count", 0)
-                print(f"[FlyDeck Daemon] Restored checkpoint from {self.checkpoint_file} (round {self.round_count})")
+                self.round_count = int(meta.get("round_count", 0))
+                last_timestamp = meta.get("last_timestamp")
+                last_close = meta.get("last_close")
+                self.last_candle_timestamp = int(last_timestamp) if last_timestamp is not None else None
+                self._prev_close = float(last_close) if last_close is not None else None
+                print(
+                    f"[FlyDeck Daemon] Restored checkpoint from {self.checkpoint_file} "
+                    f"(round {self.round_count}, last candle {self.last_candle_timestamp})"
+                )
             except Exception as e:
                 print(f"[FlyDeck Daemon] Warning: Failed to load existing checkpoint: {e}")
 
@@ -98,17 +106,34 @@ class FlyDeckLiveDaemon:
             print(f"[FlyDeck Daemon] Insufficient candles fetched: {dataset.size if dataset else 0}")
             return None
 
-        latest_candle = dataset.candles[-1]
-        # Ignore if we already processed this exact candle
+        evaluation_time = current_time if current_time is not None else time.time()
+        interval_ms = interval_to_milliseconds(self.interval)
+        evaluation_timestamp_ms = int(evaluation_time * 1000)
+        finalized = tuple(
+            candle
+            for candle in dataset.candles
+            if candle.timestamp + interval_ms <= evaluation_timestamp_ms
+        )
+        if len(finalized) < self.context_window:
+            print(
+                f"[FlyDeck Daemon] Insufficient finalized candles: "
+                f"{len(finalized)} < {self.context_window}"
+            )
+            return None
+
+        latest_candle = finalized[-1]
+        # Ignore if we already processed this exact finalized candle.
         if self.last_candle_timestamp is not None and latest_candle.timestamp <= self.last_candle_timestamp:
             return None
 
         self.last_candle_timestamp = latest_candle.timestamp
         self.round_count += 1
 
-        # 2. Extract window
-        prices = dataset.closes[-self.context_window :]
-        volumes = dataset.volumes[-self.context_window :]
+        # 2. Extract only finalized candles. This keeps live semantics aligned
+        # with the leakage-resistant benchmark, including pre-lock lead mode.
+        window = finalized[-self.context_window :]
+        prices = tuple(candle.close for candle in window)
+        volumes = tuple(candle.volume for candle in window)
 
         # 3. Perceive & Decide (visual agent handles MB causal reinforcement internally using current_price)
         stimulus, decision = self.agent.perceive(prices, volumes=volumes)
@@ -120,12 +145,14 @@ class FlyDeckLiveDaemon:
             observed_return = (latest_candle.close / self._prev_close - 1.0) * 100.0
         self._prev_close = latest_candle.close
 
-        now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        now_utc = datetime.fromtimestamp(evaluation_time, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
         # 4. Formulate record
         record: dict[str, Any] = {
             "round": self.round_count,
             "timestamp": latest_candle.timestamp,
+            "candle_close_timestamp": latest_candle.timestamp + interval_ms,
+            "evaluation_timestamp": evaluation_timestamp_ms,
             "datetime_utc": now_utc,
             "close": latest_candle.close,
             "action": decision.action.name,
@@ -207,6 +234,8 @@ class FlyDeckLiveDaemon:
             # Final checkpoint save
             meta = {
                 "round_count": self.round_count,
+                "last_timestamp": self.last_candle_timestamp,
+                "last_close": self._prev_close,
                 "stopped_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
             }
             AgentCheckpointManager.save(self.agent, self.checkpoint_file, metadata=meta)
