@@ -64,6 +64,41 @@ future = reference → no directional outcome
 
 No future candle is included in the sensory input.
 
+### Exact PancakeSwap target mode
+
+The vNext benchmark can replace the Binance next-close proxy with the actual
+PancakeSwap BNB Prediction result: Chainlink Locked Price -> Closed Price. The
+alignment uses only a fully closed Binance candle available before the chosen
+decision cutoff, so the partially formed candle around lock cannot leak into the
+features.
+
+Download settled round structs through a read-only BNB Chain JSON-RPC endpoint:
+
+```bash
+flydeck-pancake-rounds \\
+  --rpc-url YOUR_BNB_RPC_URL \\
+  --start-epoch START_EPOCH \\
+  --end-epoch END_EPOCH \\
+  --output data/cache/pancake_bnb_rounds.csv
+```
+
+Run baselines and the FlyDeck visual agent on the same frozen protocol:
+
+```bash
+flydeck-benchmark-vnext \\
+  --data data/cache/BNBUSDT_5m.csv \\
+  --pancake-rounds data/cache/pancake_bnb_rounds.csv \\
+  --decision-lead-seconds 30 \\
+  --circuit data/malecns/motion_visual.json \\
+  --fly-ablations \\
+  --context 32 --purge 1 \\
+  --min-validation-entries 500 --min-coverage 0.10
+```
+
+Without --pancake-rounds, the benchmark keeps the original Binance close[t] ->
+close[t+1] proxy so old experiments remain reproducible. The round downloader is
+read-only and does not sign transactions, connect a wallet, or place bets.
+
 The repository contains a dependency-free loader and a small downloader for public Binance market data. Historical datasets should be stored locally and never committed when they are large.
 
 ## Run
