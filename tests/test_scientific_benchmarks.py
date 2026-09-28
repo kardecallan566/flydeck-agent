@@ -69,11 +69,13 @@ def test_confusion_matrix_metrics() -> None:
     assert cm.coverage == 0.90
     assert cm.precision_up == 40 / 50
     assert cm.precision_down == 30 / 40
-    # PancakeSwap expectancy: acc * 0.97 - (1 - acc) * 1.0
+    # Balanced-pool scenario: 2x gross payout, then 3% treasury fee.
+    # Winning unit stake net profit = 2 * 0.97 - 1 = 0.94.
     acc = 70 / 90
-    expected_edge = acc * 0.97 - (1.0 - acc)
-    assert abs(cm.pancakeswap_expectancy(0.03) - expected_edge) < 1e-6
+    expected_edge = acc * 0.94 - (1.0 - acc)
+    assert abs(cm.pancakeswap_expectancy(0.03, payout_ratio=2.0) - expected_edge) < 1e-6
     assert cm.pancakeswap_expectancy() > 0.0
+    assert abs(cm.pancakeswap_break_even_accuracy() - (1.0 / 1.94)) < 1e-6
 
 
 def test_baselines_execute_consistently() -> None:

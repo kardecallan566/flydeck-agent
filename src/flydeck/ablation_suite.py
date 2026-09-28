@@ -107,7 +107,7 @@ def run_ablation_suite(
 
 def format_ablation_table(results: Sequence[AblationResult]) -> str:
     """Format ablation results as a clean markdown/text summary table."""
-    headers = f"{'Variant':<42} | {'Acc':>7} | {'Cov':>7} | {'F1':>7} | {'dAcc':>7} | {'dCov':>7} | {'PCS Edge':>8}"
+    headers = f"{'Variant':<42} | {'Acc':>7} | {'Cov':>7} | {'F1':>7} | {'dAcc':>7} | {'dCov':>7} | {'PCS Edge@2x':>8}"
     sep = "-" * len(headers)
     lines = [headers, sep]
     for r in results:

@@ -135,16 +135,33 @@ class ConfusionMatrix:
             return 0.0
         return 2.0 * (p_up * p_down) / (p_up + p_down)
 
-    def pancakeswap_expectancy(self, treasury_fee: float = 0.03) -> float:
-        """Net expected multiplier per bet on PancakeSwap Prediction (1.0 = breakeven).
+    def pancakeswap_expectancy(self, treasury_fee: float = 0.03, payout_ratio: float = 2.0) -> float:
+        """Scenario EV per unit stake under an explicit PancakeSwap payout ratio.
 
-        With 3% treasury fee, win payout is 1.0 * (1 - fee) = +0.97, loss is -1.00.
-        Net edge = accuracy * (1 - fee) - (1 - accuracy) * 1.0.
+        PancakeSwap payout is pool-dependent, so accuracy + treasury fee alone cannot
+        determine realized EV.  For a winning unit stake:
+            net_profit = payout_ratio * (1 - treasury_fee) - 1
+        A losing unit stake returns -1.  The default 2x ratio is only a balanced-pool
+        scenario proxy and must not be reported as realized PancakeSwap profitability.
         """
         if self.entered_rounds == 0:
             return 0.0
+        if not 0.0 <= treasury_fee < 1.0:
+            raise ValueError("treasury_fee must be in [0, 1)")
+        if payout_ratio <= 0.0:
+            raise ValueError("payout_ratio must be positive")
+        win_profit = payout_ratio * (1.0 - treasury_fee) - 1.0
         acc = self.accuracy
-        return acc * (1.0 - treasury_fee) - (1.0 - acc)
+        return acc * win_profit - (1.0 - acc)
+
+    @staticmethod
+    def pancakeswap_break_even_accuracy(treasury_fee: float = 0.03, payout_ratio: float = 2.0) -> float:
+        if not 0.0 <= treasury_fee < 1.0:
+            raise ValueError("treasury_fee must be in [0, 1)")
+        if payout_ratio <= 0.0:
+            raise ValueError("payout_ratio must be positive")
+        win_profit = payout_ratio * (1.0 - treasury_fee) - 1.0
+        return 1.0 / (1.0 + win_profit) if win_profit > 0.0 else 1.0
 
 
 def evaluate_predictions(
