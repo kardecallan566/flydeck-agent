@@ -8,42 +8,106 @@ from .bnb_prediction_data_runner import BNBPredictionDataset
 
 
 def causal_feature_vector(dataset: BNBPredictionDataset, index: int) -> tuple[float, ...]:
-    """Small OHLCV feature set using candle index and older data only."""
+    """Causal multi-horizon OHLCV features using candle index and older data only."""
     if not 0 <= index < dataset.size - 1:
         raise IndexError("feature index requires a following target candle")
 
     close = dataset.closes[index]
+    open_price = dataset.opens[index]
+    high = dataset.highs[index]
+    low = dataset.lows[index]
 
     def ret(lag: int) -> float:
         j = max(0, index - lag)
         base = dataset.closes[j]
         return close / max(1e-12, base) - 1.0
 
-    start = max(1, index - 11)
-    returns = [
-        dataset.closes[i] / max(1e-12, dataset.closes[i - 1]) - 1.0
-        for i in range(start, index + 1)
+    def return_stats(window: int) -> tuple[float, float]:
+        start_i = max(1, index - window + 1)
+        values = [
+            dataset.closes[i] / max(1e-12, dataset.closes[i - 1]) - 1.0
+            for i in range(start_i, index + 1)
+        ]
+        if not values:
+            return 0.0, 0.0
+        mean = sum(values) / len(values)
+        variance = sum((value - mean) ** 2 for value in values) / len(values)
+        return mean, math.sqrt(max(0.0, variance))
+
+    def mean_slice(values: Sequence[float], window: int) -> float:
+        start_i = max(0, index - window + 1)
+        chunk = values[start_i:index + 1]
+        return sum(chunk) / len(chunk) if chunk else 0.0
+
+    def ema_close(window: int) -> float:
+        start_i = max(0, index - window * 3 + 1)
+        alpha = 2.0 / (window + 1.0)
+        ema = dataset.closes[start_i]
+        for value in dataset.closes[start_i + 1:index + 1]:
+            ema = alpha * value + (1.0 - alpha) * ema
+        return ema
+
+    mean12, vol12 = return_stats(12)
+    _mean24, vol24 = return_stats(24)
+    current_range = (high - low) / max(1e-12, close)
+    body = (close - open_price) / max(1e-12, open_price)
+    candle_span = max(1e-12, high - low)
+    upper_wick = (high - max(open_price, close)) / candle_span
+    lower_wick = (min(open_price, close) - low) / candle_span
+
+    range_start = max(0, index - 11)
+    ranges = [
+        (dataset.highs[i] - dataset.lows[i]) / max(1e-12, dataset.closes[i])
+        for i in range(range_start, index + 1)
     ]
-    mean_ret = sum(returns) / len(returns) if returns else 0.0
-    variance = sum((value - mean_ret) ** 2 for value in returns) / len(returns) if returns else 0.0
-    current_range = (dataset.highs[index] - dataset.lows[index]) / max(1e-12, close)
-    body = (dataset.closes[index] - dataset.opens[index]) / max(1e-12, dataset.opens[index])
-    v_start = max(0, index - 23)
-    volume_window = dataset.volumes[v_start:index + 1]
-    mean_volume = sum(volume_window) / len(volume_window) if volume_window else 1.0
-    volume_ratio = dataset.volumes[index] / max(1e-12, mean_volume) - 1.0
+    mean_range12 = sum(ranges) / len(ranges) if ranges else current_range
+    range_surprise = current_range / max(1e-12, mean_range12) - 1.0
+
+    mean_volume24 = mean_slice(dataset.volumes, 24)
+    mean_volume6 = mean_slice(dataset.volumes, 6)
+    volume_ratio24 = math.log(max(1e-12, dataset.volumes[index]) / max(1e-12, mean_volume24))
+    volume_ratio6 = math.log(max(1e-12, dataset.volumes[index]) / max(1e-12, mean_volume6))
+    volume_trend = mean_volume6 / max(1e-12, mean_volume24) - 1.0
+
+    ema6 = ema_close(6)
+    ema12 = ema_close(12)
+    ema_gap6 = close / max(1e-12, ema6) - 1.0
+    ema_gap12 = close / max(1e-12, ema12) - 1.0
+
+    position_start = max(0, index - 23)
+    rolling_high = max(dataset.highs[position_start:index + 1])
+    rolling_low = min(dataset.lows[position_start:index + 1])
+    range24 = max(1e-12, rolling_high - rolling_low)
+    range_position = (close - rolling_low) / range24 - 0.5
+
+    minute_of_day = (dataset.timestamps[index] // 60_000) % (24 * 60)
+    phase = 2.0 * math.pi * minute_of_day / (24.0 * 60.0)
 
     return (
         ret(1),
+        ret(2),
         ret(3),
         ret(6),
         ret(12),
-        mean_ret,
-        math.sqrt(max(0.0, variance)),
+        ret(24),
+        mean12,
+        vol12,
+        vol24,
         current_range,
         body,
-        volume_ratio,
+        upper_wick,
+        lower_wick,
+        range_surprise,
+        volume_ratio24,
+        volume_ratio6,
+        volume_trend,
         dataset.trend_persistence(index, window=12) - 0.5,
+        dataset.trend_persistence(index, window=24) - 0.5,
+        ema_gap6,
+        ema_gap12,
+        range_position,
+        math.sin(phase),
+        math.cos(phase),
     )
 
 
@@ -65,7 +129,7 @@ class _Standardizer:
         self.scales = tuple(scales)
 
     def transform(self, row: tuple[float, ...]) -> tuple[float, ...]:
-        return tuple((value - mean) / scale for value, mean, scale in zip(row, self.means, self.scales))
+        return tuple(max(-8.0, min(8.0, (value - mean) / scale)) for value, mean, scale in zip(row, self.means, self.scales))
 
 
 class LogisticRegressionBaseline:

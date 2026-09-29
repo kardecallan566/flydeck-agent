@@ -23,7 +23,7 @@ def _data(n: int = 500) -> BNBPredictionDataset:
 
 def test_features_are_finite_and_causal_shape_is_stable() -> None:
     row = causal_feature_vector(_data(), 40)
-    assert len(row) == 10
+    assert len(row) == 24
     assert all(value == value for value in row)
 
 
@@ -44,7 +44,7 @@ def test_vnext_benchmark_freezes_validation_thresholds() -> None:
         min_coverage=0.20,
     )
     assert result.frozen_thresholds
-    assert any(row.name.endswith("+ WAIT") for row in result.test)
+    assert any(row.name.endswith("+ WAIT") for row in result.test)\n    assert all(len(item) == 3 for item in result.frozen_thresholds)
     for row in result.test:
         assert 0.0 <= row.coverage <= 1.0
         assert 0.0 <= row.accuracy <= 1.0

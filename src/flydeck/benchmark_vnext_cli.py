@@ -87,6 +87,8 @@ def main() -> int:
             context=args.context,
             confidence_threshold=args.fly_confidence,
             include_ablations=args.fly_ablations,
+            min_validation_entries=args.min_validation_entries,
+            min_coverage=args.min_coverage,
         )
         validation_rows = validation_rows + fly.validation
         test_rows = test_rows + fly.test
@@ -111,9 +113,12 @@ def main() -> int:
     print(f"Purge: {p.purge} prediction index(es) at each boundary")
 
     _print_table("VALIDATION", validation_rows)
-    print("\nFrozen validation-only WAIT thresholds:")
-    for name, threshold in result.frozen_thresholds:
-        print(f"  {name}: {threshold:.4f}")
+    print("\nFrozen held-out validation thresholds (UP / DOWN):")
+    all_thresholds = list(result.frozen_thresholds)
+    if args.circuit:
+        all_thresholds.extend(fly.frozen_thresholds)
+    for name, up_threshold, down_threshold in all_thresholds:
+        print(f"  {name}: UP={up_threshold:.4f} DOWN={down_threshold:.4f}")
     _print_table("TEST OOS - THRESHOLDS FROZEN", test_rows)
     return 0
 

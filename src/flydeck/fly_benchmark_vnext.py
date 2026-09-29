@@ -4,7 +4,9 @@ from dataclasses import dataclass
 
 from .bnb_prediction import Prediction
 from .bnb_prediction_data_runner import BNBPredictionDataset
+from .probability_calibration import fit_platt_calibrator
 from .receptive_fields import ReceptiveField, infer_receptive_fields
+from .selective_policy import calibrate_selective_policy
 from .statistical_metrics import BinaryEvaluation, evaluate_binary
 from .validation_protocol import ChronologicalProtocol, IndexRange
 from .visual_agent import FlyVisualPredictionAgent
@@ -15,6 +17,7 @@ from .visual_circuit import VisualCircuit
 class FlyBenchmarkResult:
     validation: tuple[BinaryEvaluation, ...]
     test: tuple[BinaryEvaluation, ...]
+    frozen_thresholds: tuple[tuple[str, float, float], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,14 +36,15 @@ def run_vnext_fly(
     confidence_threshold: float = 0.15,
     include_ablations: bool = False,
     receptive_fields: dict[int, ReceptiveField] | None = None,
+    min_validation_entries: int = 100,
+    min_coverage: float = 0.10,
 ) -> FlyBenchmarkResult:
-    """Run FlyDeck on the exact same frozen train/validation/test boundaries.
+    """Run FlyDeck on frozen boundaries and add held-out calibrated selection.
 
-    Plasticity is enabled only in the training range. Validation and test keep
-    learned weights but disable further learning. When external PancakeSwap
-    targets are attached to the market dataset, they are used for evaluation;
-    the visual agent's internal causal market-return adaptation remains based
-    only on information observed before each later decision.
+    Plasticity is enabled only in training. Validation/test preserve learned
+    weights but disable learning. For each variant, the first half of validation
+    fits Platt scaling and the second half selects asymmetric UP/DOWN WAIT
+    thresholds. Both are frozen before OOS evaluation.
     """
     fields = receptive_fields or infer_receptive_fields(circuit, iterations=6)
     variants: list[tuple[str, dict[str, bool]]] = [("FlyDeck Full", {})]
@@ -67,6 +71,7 @@ def run_vnext_fly(
 
     validation_rows: list[BinaryEvaluation] = []
     test_rows: list[BinaryEvaluation] = []
+    thresholds: list[tuple[str, float, float]] = []
     validation_outcomes = _outcomes(dataset, protocol.validation)
     test_outcomes = _outcomes(dataset, protocol.test)
 
@@ -103,25 +108,64 @@ def run_vnext_fly(
             )
         )
 
-        if name == "FlyDeck Full":
-            validation_rows.append(
-                evaluate_binary(
-                    "FlyDeck Full - No WAIT",
-                    validation_trace.forced_predictions,
-                    validation_outcomes,
-                    p_up=validation_trace.p_up,
-                )
+        validation_rows.append(
+            evaluate_binary(
+                name + " - No WAIT",
+                validation_trace.forced_predictions,
+                validation_outcomes,
+                p_up=validation_trace.p_up,
             )
-            test_rows.append(
-                evaluate_binary(
-                    "FlyDeck Full - No WAIT",
-                    test_trace.forced_predictions,
-                    test_outcomes,
-                    p_up=test_trace.p_up,
-                )
+        )
+        test_rows.append(
+            evaluate_binary(
+                name + " - No WAIT",
+                test_trace.forced_predictions,
+                test_outcomes,
+                p_up=test_trace.p_up,
             )
+        )
 
-    return FlyBenchmarkResult(validation=tuple(validation_rows), test=tuple(test_rows))
+        split = max(1, len(validation_trace.p_up) // 2)
+        calibrator = fit_platt_calibrator(
+            validation_trace.p_up[:split],
+            validation_outcomes[:split],
+        )
+        val_prob = calibrator.apply(validation_trace.p_up)
+        test_prob = calibrator.apply(test_trace.p_up)
+        try:
+            selective = calibrate_selective_policy(
+                val_prob[split:],
+                validation_outcomes[split:],
+                min_entries=min_validation_entries,
+                min_coverage=min_coverage,
+                asymmetric=True,
+            )
+        except ValueError:
+            continue
+
+        thresholds.append((name, selective.policy.up_threshold, selective.policy.down_threshold))
+        validation_rows.append(
+            evaluate_binary(
+                name + " + CAL + WAIT",
+                selective.policy.apply(val_prob),
+                validation_outcomes,
+                p_up=val_prob,
+            )
+        )
+        test_rows.append(
+            evaluate_binary(
+                name + " + CAL + WAIT",
+                selective.policy.apply(test_prob),
+                test_outcomes,
+                p_up=test_prob,
+            )
+        )
+
+    return FlyBenchmarkResult(
+        validation=tuple(validation_rows),
+        test=tuple(test_rows),
+        frozen_thresholds=tuple(thresholds),
+    )
 
 
 def _run_trace(
