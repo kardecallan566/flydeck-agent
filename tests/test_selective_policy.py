@@ -9,6 +9,16 @@ def test_selective_policy_abstains_near_half() -> None:
     assert policy.decide(0.20) == Prediction.DOWN
 
 
+def test_asymmetric_policy_can_gate_directions_independently() -> None:
+    policy = SelectivePolicy(
+        up_confidence_threshold=0.50,
+        down_confidence_threshold=0.10,
+    )
+    assert policy.decide(0.70) == Prediction.WAIT
+    assert policy.decide(0.80) == Prediction.UP
+    assert policy.decide(0.44) == Prediction.DOWN
+
+
 def test_calibration_respects_minimum_support() -> None:
     probabilities = tuple([0.90, 0.10] * 60 + [0.52, 0.48] * 40)
     outcomes = tuple([Prediction.UP, Prediction.DOWN] * 60 + [Prediction.DOWN, Prediction.UP] * 40)
@@ -20,4 +30,5 @@ def test_calibration_respects_minimum_support() -> None:
     )
     assert result.validation.entered >= 100
     assert result.validation.coverage >= 0.40
-    assert 0.0 <= result.policy.confidence_threshold <= 1.0
+    assert 0.0 <= result.policy.up_threshold <= 1.0
+    assert 0.0 <= result.policy.down_threshold <= 1.0
