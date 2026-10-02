@@ -1,6 +1,8 @@
 name: tests
 
 on:
+  push:
+    branches: [feat/evolution-population-100-300]
   pull_request:
   workflow_dispatch:
 
