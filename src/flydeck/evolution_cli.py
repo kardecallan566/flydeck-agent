@@ -8,6 +8,7 @@ from .bnb_prediction_data_runner import load_bnb_5m_csv
 from .evolution import (
     EvolutionSettings, fly_feature_cache, load_odds_snapshots, run_evolution,
 )
+from .evolution_comparison import write_ablation_comparison
 from .pancakeswap_targets import align_pancake_rounds_to_market, load_pancake_rounds_csv
 
 
@@ -31,6 +32,7 @@ def main() -> int:
     p.add_argument("--population", type=int, choices=(100, 200, 300), default=100)
     p.add_argument("--output", type=Path, default=Path("data/evolution/run"))
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--compare-no-fly", action="store_true", help="Run matched seed/timestamps with and without frozen MaleCNS features; doubles cheap population pass, not neural cache")
     p.add_argument("--block-size", type=int, default=10000)
     p.add_argument("--circuit", type=Path, help="Optional circuit; compute one shared frozen Fly signal cache")
     p.add_argument("--fly-cache", type=Path, default=Path("data/cache/fly_shared_features.npz"))
@@ -42,13 +44,15 @@ def main() -> int:
     p.add_argument("--recent-rounds", type=Path)
     p.add_argument("--recent-odds-snapshots", type=Path)
     p.add_argument("--recent-fly-cache", type=Path, default=Path("data/cache/recent_fly_shared_features.npz"))
-    p.add_argument("--recent-holdout", type=int, default=2016)
+    p.add_argument("--recent-holdout", type=int, default=None, help="Number of most recent candles to keep sealed. Default: ALL --recent-data candles, without recent adaptation")
     p.add_argument("--min-entries", type=int, default=80)
     p.add_argument("--min-coverage", type=float, default=0.05)
     p.add_argument("--scenario-gross-odds", type=float, default=2.0)
     p.add_argument("--scenario-fee", type=float, default=0.03)
     p.add_argument("--gas-fraction-of-stake", type=float, default=0.0)
     args = p.parse_args()
+    if args.compare_no_fly and not args.circuit:
+        p.error("--compare-no-fly requires --circuit")
     if args.odds_snapshots and not args.pancake_rounds:
         p.error("--odds-snapshots requires --pancake-rounds")
     if args.recent_rounds and not args.recent_data:
@@ -84,14 +88,32 @@ def main() -> int:
         scenario_gross_odds=args.scenario_gross_odds, scenario_fee=args.scenario_fee,
         gas_fraction_of_stake=args.gas_fraction_of_stake,
     )
-    result = run_evolution(
-        data, settings, output=args.output, alignment=alignment, odds_by_epoch=odds,
-        fly_signal=fly, recent=recent, recent_alignment=recent_alignment,
-        recent_fly_signal=recent_fly, recent_odds_by_epoch=recent_odds,
-        recent_holdout=args.recent_holdout,
+    sealed_count = args.recent_holdout if args.recent_holdout is not None else (
+        recent.size if recent is not None else 2016
     )
-    print(f"Finished: {result['population']} agents | {args.output}")
-    print("No real-money execution. Review summary.json, final_population.csv, all_block_results.csv.")
+    def execute(out, signal, recent_signal):
+        return run_evolution(
+            data, settings, output=out, alignment=alignment, odds_by_epoch=odds,
+            fly_signal=signal, recent=recent, recent_alignment=recent_alignment,
+            recent_fly_signal=recent_signal, recent_odds_by_epoch=recent_odds,
+            recent_holdout=sealed_count,
+        )
+
+    if args.compare_no_fly:
+        print("CONTROLLED EXPERIMENT: shared MaleCNS versus OHLCV-only; "
+              "same seed, block splits, risk settings and historical data.")
+        execute(args.output / "with_fly", fly, recent_fly)
+        execute(args.output / "without_fly", None, None)
+        report = write_ablation_comparison(args.output)
+        print("ABLATED COMPARISON SAVED:", args.output / "ablation_report.json")
+        print("Holdout results are DESCRIPTIVE; no agent is live-approved.")
+        print("Audit median-equity difference (with - without):",
+              report["delta_with_minus_without"]["all_historical_audit"]["median_equity"])
+    else:
+        result = execute(args.output, fly, recent_fly)
+        print(f"Finished: {result['population']} agents | {args.output}")
+        print("Review summary.json, final_population.csv and all_block_results.csv.")
+    print("Research only: no real-money execution.")
     return 0
 
 

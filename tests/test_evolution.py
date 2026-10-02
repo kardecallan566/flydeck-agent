@@ -87,3 +87,50 @@ def test_invalid_configuration_rejected():
         EvolutionSettings(population=301)
     with pytest.raises(ValueError):
         EvolutionSettings(stake_fraction=1.0)
+
+
+def test_separate_survival_risk_profit_and_evidence(tmp_path):
+    import csv
+    s = EvolutionSettings(population=100, block_size=40, min_entries=1)
+    run_evolution(dataset(360), s, output=tmp_path)
+    with (tmp_path / "all_block_results.csv").open(newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == 700
+    for row in rows:
+        risk = row["risk_survived"] == "True"
+        profitable = row["profitable"] == "True"
+        survived = row["survived"] == "True"
+        assert survived == (risk and profitable)
+        assert not row["statistical_evidence"] == "True" or survived
+
+
+def test_full_2000_closed_recent_holdout_without_adaptation(tmp_path):
+    historic = dataset(360)
+    latest = dataset(2000, start=historic.timestamps[-1] + 300000)
+    s = EvolutionSettings(population=100, block_size=40, min_entries=1)
+    report = run_evolution(
+        historic, s, output=tmp_path / "full_holdout",
+        recent=latest, recent_holdout=2000,
+    )
+    sealed = report["recent_test"]
+    assert sealed["adaptation_candles"] == 0
+    assert sealed["sealed_candles_requested"] == 2000
+    assert sealed["warmup_skipped"] == 32
+    assert (tmp_path / "full_holdout" / "recent_sealed_results.csv").exists()
+
+
+def test_controlled_comparison_report_without_live_approval(tmp_path):
+    from flydeck.evolution_comparison import write_ablation_comparison
+    from flydeck.evolution import FAMILIES
+    history = dataset(360)
+    s = EvolutionSettings(population=100, block_size=40, min_entries=1)
+    run_evolution(
+        history, s, output=tmp_path / "with_fly",
+        fly_signal=np.zeros(history.size, dtype=np.float32),
+    )
+    run_evolution(history, s, output=tmp_path / "without_fly")
+    report = write_ablation_comparison(tmp_path)
+    assert report["paired_seed_and_time_windows"]
+    assert len(FAMILIES) == 10
+    assert report["with_fly"]["all_validation"]["agents"] == 100
+    assert (tmp_path / "ablation_report.csv").exists()

@@ -2,7 +2,7 @@ name: tests
 
 on:
   push:
-    branches: [feat/evolution-population-100-300]
+    branches: [feat/evolution-population-100-300, feat/evolution-v2-survival-control-recent]
   pull_request:
   workflow_dispatch:
 
