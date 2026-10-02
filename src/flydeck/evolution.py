@@ -22,6 +22,10 @@ from .bnb_prediction_data_runner import BNBPredictionDataset
 from .pancakeswap_targets import PancakeAlignment
 
 
+# Bump whenever neural inference/cache semantics change. V3 disables ALL
+# reward-learning submodules, not just the parent boolean.
+FLY_CACHE_VERSION = "frozen-inference-v3-set-learning"
+
 FEATURE_NAMES = (
     "bias", "return_1", "return_2", "return_3", "return_6",
     "return_12", "return_24", "volatility_6", "volatility_24",
@@ -95,11 +99,11 @@ def fly_feature_cache(
     cache_file: Path, context: int = 32, rebuild: bool = False,
 ) -> np.ndarray:
     """Run ONE frozen shared visual circuit, cache by both input-file hashes."""
-    fingerprint = _hash(market_file) + ":" + _hash(circuit_file) + ":" + str(context)
+    fingerprint = ":".join((FLY_CACHE_VERSION, _hash(market_file), _hash(circuit_file), str(context)))
     if cache_file.exists() and not rebuild:
         with np.load(cache_file, allow_pickle=False) as loaded:
             if str(loaded["fingerprint"].item()) != fingerprint:
-                raise ValueError("Fly cache is stale: supply --rebuild-fly-cache")
+                raise ValueError("Fly cache is stale (inference/version/input changed): supply --rebuild-fly-cache")
             signal = loaded["signal"].astype(np.float32)
             timestamps = loaded["timestamps"].astype(np.int64)
         if signal.shape != (data.size,) or not np.array_equal(timestamps, data.timestamps):
@@ -111,7 +115,7 @@ def fly_feature_cache(
 
     circuit = VisualCircuit.load(circuit_file)
     agent = FlyVisualPredictionAgent(circuit, confidence_threshold=0.0)
-    agent.visual.learning_enabled = False
+    agent.set_learning(False)  # Propagate to decision engine and episodic memory, too.
     signal = np.zeros(data.size, dtype=np.float32)
     print(f"Building shared MaleCNS cache: {data.size} candles, {agent.neuron_count} neurons")
     for i in range(max(32, context) - 1, data.size):
@@ -312,6 +316,11 @@ def _block(
     start: int, stop: int, *, stage: str, block: int,
     settings: EvolutionSettings, learn: bool, odds: dict[int, tuple[float, float]] | None,
     epochs: dict[int, int],
+    trace_rows: list[dict] | None = None,
+    trace_agents: set[str] | None = None,
+    timestamp_ms: tuple[int, ...] | None = None,
+    initial_state: dict[str, dict] | None = None,
+    state_out: dict[str, dict] | None = None,
 ) -> list[WindowResult]:
     """Vectorized policy update; online feedback is delayed until resolution."""
     count = len(agents)
@@ -328,6 +337,15 @@ def _block(
     up = np.zeros(count, dtype=np.int64)
     down = np.zeros(count, dtype=np.int64)
     halted = np.zeros(count, dtype=bool)
+    if initial_state is not None:
+        for j, agent in enumerate(agents):
+            prev = initial_state.get(agent.agent_id)
+            if prev is None:
+                continue
+            bank[j] = float(prev["equity"])
+            peak[j] = float(prev["peak"])
+            drawdown[j] = float(prev["max_drawdown"])
+            halted[j] = bool(prev["halted"])
     eligible = 0
     pending: list[tuple[int, np.ndarray, np.ndarray, float]] = []
     odds_default = (settings.scenario_gross_odds, settings.scenario_gross_odds)
@@ -369,10 +387,41 @@ def _block(
         net_unit = np.where(
             success, gross * (1.0 - settings.scenario_fee) - 1.0, -1.0,
         ) - settings.gas_fraction_of_stake
+        bank_before = bank.copy() if trace_rows is not None else None
         bank += bank * settings.stake_fraction * net_unit * chosen
         peak = np.maximum(peak, bank)
         drawdown = np.maximum(drawdown, (peak - bank) / np.maximum(peak, 1e-9))
         halted |= drawdown >= settings.max_drawdown
+        if trace_rows is not None:
+            if timestamp_ms is None:
+                raise ValueError("timestamp_ms is mandatory when tracing predictions")
+            if trace_agents is None:
+                raise ValueError("trace_agents is mandatory to bound memory")
+            for j, agent in enumerate(agents):
+                if agent.agent_id not in trace_agents:
+                    continue
+                action = ("UP" if bool(action_up[j]) else "DOWN") if bool(chosen[j]) else "WAIT"
+                trace_rows.append({
+                    "stage": stage, "block": block,
+                    "agent_id": agent.agent_id, "family": agent.family,
+                    "feature_index": i,
+                    "feature_candle_open_ms": int(timestamp_ms[i]),
+                    "decision_earliest_ms": int(timestamp_ms[i]) + 300_000,
+                    "outcome_available_index": int(ready[i]),
+                    "epoch": epochs.get(i, ""),
+                    "p_up": float(prob[j]), "confidence": float(confidence[j]),
+                    "threshold": float(threshold[j]), "action": action,
+                    "wait_reason": (
+                        "" if bool(chosen[j]) else
+                        "risk_halt" if bool(halted[j]) else "low_confidence"
+                    ),
+                    "resolved_outcome": "UP" if y[i] == 1 else "DOWN",
+                    "correct": (bool(success[j]) if bool(chosen[j]) else ""),
+                    "quote_gross": (float(gross[j]) if bool(chosen[j]) else ""),
+                    "equity_before": float(bank_before[j]),
+                    "equity_after": float(bank[j]),
+                    "economic_mode": "prelock_snapshot" if odds is not None else "illustrative_scenario",
+                })
         if learn:
             pending.append((int(ready[i]), f, prob.copy(), float(y[i])))
 
@@ -381,6 +430,13 @@ def _block(
         # into an earlier generation or across purge boundaries.
         for j, agent in enumerate(agents):
             agent.weights = weights[j].copy()
+
+    if state_out is not None:
+        for j, agent in enumerate(agents):
+            state_out[agent.agent_id] = {
+                "equity": float(bank[j]), "peak": float(peak[j]),
+                "max_drawdown": float(drawdown[j]), "halted": bool(halted[j]),
+            }
 
     results = []
     for j, agent in enumerate(agents):
@@ -513,6 +569,7 @@ def run_evolution(
         + ["historical_audit"] * settings.audit_blocks
     )
     finalists: list[str] = []
+    audit_trace: list[dict] = []
     for b, stage in enumerate(phases):
         begin = 31 + b * settings.block_size if b == 0 else b * settings.block_size
         end = min(data.size - 1, (b + 1) * settings.block_size)
@@ -522,6 +579,9 @@ def run_evolution(
         results = _block(
             agents, features, y, ready, begin, end, stage=stage, block=b,
             settings=settings, learn=learn, odds=odds_by_epoch, epochs=epochs,
+            trace_rows=audit_trace if stage == "historical_audit" else None,
+            trace_agents=set(finalists) if stage == "historical_audit" else None,
+            timestamp_ms=data.timestamps if stage == "historical_audit" else None,
         )
         history.extend(asdict(r) for r in results)
         block_results[f"{stage}-{b}"] = results
@@ -570,6 +630,7 @@ def run_evolution(
         })
     final_rows.sort(key=lambda row: by_val[row["agent_id"]].fitness, reverse=True)
     _save_csv(output / "all_block_results.csv", history)
+    _save_csv(output / "historical_audit_finalist_decisions.csv", audit_trace)
     _save_csv(output / "final_population.csv", final_rows)
     _save_csv(output / "lineage.csv", [
         {k: v for k, v in details.items() if k != "weights"}
@@ -601,7 +662,32 @@ def run_evolution(
         },
         "note": "Historical audit was previously examined; do not treat it as a fresh independent test.",
         "recent_test": "not_supplied",
+        "male_cns_cache_version": FLY_CACHE_VERSION if fly_signal is not None else None,
     }
+
+    # Save the FROZEN, auditable model state BEFORE any optional recent adaptation.
+    # Checkpoint all 100+ agents so that candidate selection can be declared
+    # before the NEXT, never-before-seen prospective test.
+    output.mkdir(parents=True, exist_ok=True)
+    checkpoint = {
+        "schema_version": 1, "source_target": data.target_name,
+        "frozen_before_recent": True, "research_only": True,
+        "last_historical_candle_open_ms": int(data.timestamps[-1]),
+        "population": settings.population,
+        "feature_names": list(FEATURE_NAMES),
+        "has_shared_fly_signal": fly_signal is not None,
+        "fly_cache_version": FLY_CACHE_VERSION if fly_signal is not None else None,
+        "finalists_selected_on_validation": finalists,
+        "settings": asdict(settings),
+        "agents": [
+            {**_agent_details(a), "mask": [float(v) for v in a.mask]}
+            for a in agents
+        ],
+    }
+    (output / "population_checkpoint.json").write_text(
+        json.dumps(checkpoint, indent=2, ensure_ascii=False) + "\n", encoding="utf-8",
+    )
+    summary["checkpoint_before_recent"] = "population_checkpoint.json"
 
     if recent is not None:
         # All finalists and non-finalists share the same unseen holdout;
@@ -619,11 +705,15 @@ def run_evolution(
                 block=0, settings=settings, learn=True, odds=recent_odds_by_epoch,
                 epochs=re,
             )
+        recent_trace: list[dict] = []
         recent_rows = _block(
             agents, rx, ry, rr, max(32, end_train), recent.size - 1,
             stage="recent_sealed", block=1, settings=settings, learn=False,
             odds=recent_odds_by_epoch, epochs=re,
+            trace_rows=recent_trace, trace_agents=set(finalists),
+            timestamp_ms=recent.timestamps,
         )
+        _save_csv(output / "recent_sealed_finalist_decisions.csv", recent_trace)
         _save_csv(output / "recent_sealed_results.csv", [
             asdict(r) for r in recent_rows
         ])
