@@ -404,7 +404,7 @@ def evolve(
     # Preserve one exploratory representative from every family.
     for family in FAMILIES:
         representative = next((a for a in ranked if a.family == family), None)
-        if representative and representative not in elite:
+        if representative and all(existing.agent_id != representative.agent_id for existing in elite):
             elite[-1] = representative
     seen: set[str] = set()
     unique = []
@@ -553,10 +553,8 @@ def run_evolution(
         # nobody is selected/promoted based on this holdout.
         if recent.size < max(100, recent_holdout + 33):
             raise ValueError("recent dataset too small for warmup and holdout")
-        if recent.timestamps[0] <= data.timestamps[-1]:
-            # Separate files must not duplicate or overlap historical data.
-            if recent.timestamps[recent.size - recent_holdout] <= data.timestamps[-1]:
-                raise ValueError("recent sealed holdout overlaps historical timestamps")
+        if recent.timestamps[recent.size - recent_holdout] <= data.timestamps[-1]:
+            raise ValueError("recent sealed holdout overlaps historical timestamps")
         rx = market_features(recent, recent_fly_signal)
         ry, rr, re = _labels(recent, recent_alignment)
         end_train = recent.size - recent_holdout
