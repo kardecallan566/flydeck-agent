@@ -185,3 +185,7 @@ The FlyDeck Agent is not currently intended to:
 - `WAIT` is a valid behavior.
 - Prefer structural explanations over blind parameter searches.
 - Keep memory, compute and dependencies small.
+
+## Evolution v3 — frozen prospective test
+
+See [EVOLUTION_V3_FORWARD.md](docs/EVOLUTION_V3_FORWARD.md) to reproduce the 100-agent controlled ablation with a fully frozen shared MaleCNS, export all model checkpoints and evaluate NEW Binance candles without retraining or real-money execution.
