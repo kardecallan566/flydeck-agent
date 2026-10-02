@@ -11,6 +11,7 @@ dependencies = []
 
 [project.optional-dependencies]
 connectome = ["pyarrow>=18.0"]
+evolution = ["numpy>=1.24"]
 
 [project.scripts]
 flydeck = "flydeck.cli:main"
@@ -21,6 +22,7 @@ flydeck-visual-diagnostics = "flydeck.visual_diagnostics_cli:main"
 flydeck-scientific = "flydeck.scientific_cli:main"
 flydeck-benchmark-vnext = "flydeck.benchmark_vnext_cli:main"
 flydeck-pancake-rounds = "flydeck.pancakeswap_rounds_cli:main"
+flydeck-evolve = "flydeck.evolution_cli:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
