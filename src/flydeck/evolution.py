@@ -400,20 +400,21 @@ def evolve(
     by_id = {r.agent_id: r for r in results}
     ranked = sorted(agents, key=lambda a: by_id[a.agent_id].fitness, reverse=True)
     keep = max(len(FAMILIES), int(settings.population * settings.survivors))
-    elite = ranked[:keep]
-    # Preserve one exploratory representative from every family.
+    # Guarantee one representative per family, then fill remaining slots
+    # by fitness. Compare IDs, not dataclasses with NumPy arrays.
+    unique: list[Candidate] = []
+    seen: set[str] = set()
     for family in FAMILIES:
         representative = next((a for a in ranked if a.family == family), None)
-        if representative and all(existing.agent_id != representative.agent_id for existing in elite):
-            elite[-1] = representative
-    seen: set[str] = set()
-    unique = []
-    for agent in elite + ranked:
+        if representative is not None:
+            unique.append(representative)
+            seen.add(representative.agent_id)
+    for agent in ranked:
+        if len(unique) >= keep:
+            break
         if agent.agent_id not in seen:
             unique.append(agent)
             seen.add(agent.agent_id)
-        if len(unique) >= keep:
-            break
     next_generation = list(unique)
     for i in range(settings.population - len(unique)):
         parent = unique[i % len(unique)]
