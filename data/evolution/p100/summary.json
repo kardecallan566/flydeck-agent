@@ -1,0 +1,36 @@
+{
+  "research_only": true,
+  "real_execution_enabled": false,
+  "population": 100,
+  "seed": 42,
+  "historical_target": "binance-close-t+1",
+  "economic_mode": "illustrative_scenario_not_actual_pnl",
+  "fly_features": "shared_cached_malecns",
+  "settings": {
+    "population": 100,
+    "seed": 42,
+    "block_size": 10000,
+    "warmup_blocks": 3,
+    "development_blocks": 2,
+    "validation_blocks": 1,
+    "audit_blocks": 1,
+    "survivors": 0.2,
+    "min_entries": 80,
+    "min_coverage": 0.05,
+    "stake_fraction": 0.002,
+    "max_drawdown": 0.25,
+    "scenario_gross_odds": 2.0,
+    "scenario_fee": 0.03,
+    "gas_fraction_of_stake": 0.0,
+    "finalists": 5
+  },
+  "finalists_selected_before_audit_or_recent": [
+    "G05-0067",
+    "G05-0035",
+    "G03-0043",
+    "G04-0003",
+    "G04-0052"
+  ],
+  "note": "Historical audit was previously examined; do not treat it as a fresh independent test.",
+  "recent_test": "not_supplied"
+}
