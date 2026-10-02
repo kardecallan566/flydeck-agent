@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .bnb_prediction_data_runner import load_bnb_5m_csv
 from .evolution import fly_feature_cache, load_odds_snapshots, market_features
-from .forward_eval import frozen_forward_arm, sha256_file, summarize_frozen_comparison
+from .forward_eval import frozen_forward_arm, sha256_file, summarize_frozen_comparison, load_checkpoint
 from .pancakeswap_targets import align_pancake_rounds_to_market, load_pancake_rounds_csv
 
 
@@ -41,6 +41,18 @@ def main() -> int:
         if meta.get("symbol") != "BNBUSDT" or meta.get("interval") != "5m":
             parser.error("--after-meta must describe BNBUSDT 5m data")
         last_seen = int(meta["last_open_ms"])
+
+    fly_cp, _ = load_checkpoint(args.with_checkpoint, expect_fly=True)
+    base_cp, _ = load_checkpoint(args.without_checkpoint, expect_fly=False)
+    if (fly_cp["last_historical_candle_open_ms"] != base_cp["last_historical_candle_open_ms"]
+        or fly_cp["source_target"] != base_cp["source_target"]
+        or fly_cp["settings"] != base_cp["settings"]
+        or (fly_cp.get("source_candles_sha256") and base_cp.get("source_candles_sha256")
+            and fly_cp["source_candles_sha256"] != base_cp["source_candles_sha256"])):
+        parser.error("frozen arms must use the same history, target and settings")
+    if (fly_cp.get("circuit_sha256")
+        and fly_cp["circuit_sha256"] != sha256_file(args.circuit)):
+        parser.error("MaleCNS circuit differs from the one used in frozen training")
 
     data = load_bnb_5m_csv(args.data)
     alignment = None

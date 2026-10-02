@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .bnb_prediction_data_runner import load_bnb_5m_csv
 from .evolution import (
-    EvolutionSettings, fly_feature_cache, load_odds_snapshots, run_evolution,
+    EvolutionSettings, fly_feature_cache, load_odds_snapshots, run_evolution, _hash,
 )
 from .evolution_comparison import write_ablation_comparison
 from .pancakeswap_targets import align_pancake_rounds_to_market, load_pancake_rounds_csv
@@ -97,6 +97,8 @@ def main() -> int:
             fly_signal=signal, recent=recent, recent_alignment=recent_alignment,
             recent_fly_signal=recent_signal, recent_odds_by_epoch=recent_odds,
             recent_holdout=sealed_count,
+            source_candles_sha256=_hash(args.data),
+            circuit_sha256=_hash(args.circuit) if signal is not None else None,
         )
 
     if args.compare_no_fly:

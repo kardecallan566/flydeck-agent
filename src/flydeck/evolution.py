@@ -546,6 +546,8 @@ def run_evolution(
     recent_alignment: PancakeAlignment | None = None,
     recent_odds_by_epoch: dict[int, tuple[float, float]] | None = None,
     recent_holdout: int = 2016,
+    source_candles_sha256: str | None = None,
+    circuit_sha256: str | None = None,
 ) -> dict:
     """All populations produce individual CSV results; no real-money execution."""
     required_blocks = (
@@ -671,6 +673,8 @@ def run_evolution(
     output.mkdir(parents=True, exist_ok=True)
     checkpoint = {
         "schema_version": 1, "source_target": data.target_name,
+        "source_candles_sha256": source_candles_sha256,
+        "circuit_sha256": circuit_sha256 if fly_signal is not None else None,
         "frozen_before_recent": True, "research_only": True,
         "last_historical_candle_open_ms": int(data.timestamps[-1]),
         "population": settings.population,
