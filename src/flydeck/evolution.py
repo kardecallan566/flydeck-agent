@@ -163,8 +163,13 @@ class WindowResult:
     coverage: float
     equity: float
     max_drawdown: float
-    survived: bool
+    survived: bool  # Profitable AND within participation / drawdown constraints
     fitness: float
+    risk_survived: bool = False
+    profitable: bool = False
+    wilson_lower_95: float = 0.0
+    break_even_probability: float | None = None
+    statistical_evidence: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,6 +244,17 @@ def initial_population(settings: EvolutionSettings, *, fly_available: bool) -> l
 
 def _sigmoid(z: np.ndarray) -> np.ndarray:
     return 1.0 / (1.0 + np.exp(-np.clip(z, -25, 25)))
+
+
+def _wilson_lower(correct: int, entered: int, z: float = 1.95996398454) -> float:
+    """Approximate binomial lower confidence bound; not a proof of trading edge."""
+    if entered <= 0:
+        return 0.0
+    p = correct / entered
+    z2 = z * z
+    return max(0.0, (p + z2 / (2 * entered)
+        - z * math.sqrt((p * (1 - p) + z2 / (4 * entered)) / entered)
+    ) / (1 + z2 / entered))
 
 
 def _labels(
@@ -370,23 +386,37 @@ def _block(
     for j, agent in enumerate(agents):
         entries = int(entered[j])
         coverage = entries / eligible if eligible else 0.0
-        survived = (
+        risk_survived = (
             not halted[j] and entries >= settings.min_entries
             and coverage >= settings.min_coverage
         )
-        # Rank even ineligible candidates for exploration, but never call them
-        # eligible or profitable based on this ranking alone.
+        profitable = float(bank[j]) > 100.0 + 1e-9
+        # Economic scenario is an explicit assumption. A variable pre-lock
+        # payout requires a per-bet analysis, not a single break-even threshold.
+        break_even = (
+            (1 + settings.gas_fraction_of_stake)
+            / (settings.scenario_gross_odds * (1 - settings.scenario_fee))
+            if odds is None else None
+        )
+        wilson = _wilson_lower(int(correct[j]), entries)
+        evidence = bool(
+            risk_survived and profitable and break_even is not None
+            and wilson > break_even
+        )
+        survived = bool(risk_survived and profitable)
+        # Risk-qualified but losing policies can remain as diverse exploratory
+        # parents. They are NEVER marked as profitable or as surviving profit.
         fitness = (
             math.log(max(1e-9, float(bank[j]) / 100.0))
-            - 2 * float(drawdown[j])
-            + 0.02 * coverage
-            if survived else -1e6 + entries / max(1, eligible)
+            - 2 * float(drawdown[j]) + 0.02 * coverage
+            if risk_survived else -1e6 + entries / max(1, eligible)
         )
         results.append(WindowResult(
             stage, block, agent.agent_id, agent.family, agent.parent_id,
             agent.generation, eligible, entries, int(correct[j]), int(up[j]),
             int(down[j]), int(correct[j]) / entries if entries else 0.0,
-            coverage, float(bank[j]), float(drawdown[j]), bool(survived), fitness,
+            coverage, float(bank[j]), float(drawdown[j]), survived, fitness,
+            bool(risk_survived), bool(profitable), wilson, break_even, evidence,
         ))
     return results
 
@@ -526,9 +556,16 @@ def run_evolution(
             "validation_accuracy": v.accuracy, "validation_coverage": v.coverage,
             "validation_equity": v.equity, "validation_max_drawdown": v.max_drawdown,
             "validation_survived": v.survived,
+            "validation_risk_survived": v.risk_survived,
+            "validation_profitable": v.profitable,
+            "validation_statistical_evidence": v.statistical_evidence,
             "audit_accuracy": a.accuracy, "audit_coverage": a.coverage,
             "audit_equity": a.equity, "audit_max_drawdown": a.max_drawdown,
             "audit_survived": a.survived,
+            "audit_risk_survived": a.risk_survived,
+            "audit_profitable": a.profitable,
+            "audit_statistical_evidence": a.statistical_evidence,
+            "positive_both_validation_and_audit": bool(v.profitable and a.profitable),
             "finalist": agent.agent_id in finalists,
         })
     final_rows.sort(key=lambda row: by_val[row["agent_id"]].fitness, reverse=True)
@@ -545,6 +582,23 @@ def run_evolution(
         "economic_mode": "prelock_snapshot" if odds_by_epoch is not None else "illustrative_scenario_not_actual_pnl",
         "fly_features": "shared_cached_malecns" if fly_signal is not None else "OHLCV_only_screening",
         "settings": asdict(settings), "finalists_selected_before_audit_or_recent": finalists,
+        "qualification": {
+            "risk_survived": "entries, coverage, max drawdown",
+            "profitable": "equity above initial 100 in this one block",
+            "survived": "risk_survived AND profitable",
+            "statistical_evidence": "illustrative Wilson lower bound exceeds fixed-scenario break even; NOT trading approval",
+            "validation_survived_count": sum(r.survived for r in validation),
+            "audit_survived_count": sum(r.survived for r in audit),
+            "positive_both_blocks_count": sum(
+                by_val[a.agent_id].profitable and by_audit[a.agent_id].profitable
+                for a in agents
+            ),
+            "risk_and_profit_both_blocks_count": sum(
+                by_val[a.agent_id].survived and by_audit[a.agent_id].survived
+                for a in agents
+            ),
+            "historical_qualified_but_not_live_approved": True,
+        },
         "note": "Historical audit was previously examined; do not treat it as a fresh independent test.",
         "recent_test": "not_supplied",
     }
@@ -552,10 +606,10 @@ def run_evolution(
     if recent is not None:
         # All finalists and non-finalists share the same unseen holdout;
         # nobody is selected/promoted based on this holdout.
-        if recent.size < max(100, recent_holdout + 33):
-            raise ValueError("recent dataset too small for warmup and holdout")
-        if recent.timestamps[recent.size - recent_holdout] <= data.timestamps[-1]:
-            raise ValueError("recent sealed holdout overlaps historical timestamps")
+        if recent_holdout < 100 or recent_holdout > recent.size or recent.size < 35:
+            raise ValueError("recent dataset too small or invalid holdout")
+        if recent.timestamps[0] <= data.timestamps[-1]:
+            raise ValueError("recent dataset overlaps historical timestamps; provide strictly newer candles")
         rx = market_features(recent, recent_fly_signal)
         ry, rr, re = _labels(recent, recent_alignment)
         end_train = recent.size - recent_holdout
@@ -566,15 +620,23 @@ def run_evolution(
                 epochs=re,
             )
         recent_rows = _block(
-            agents, rx, ry, rr, end_train, recent.size - 1,
+            agents, rx, ry, rr, max(32, end_train), recent.size - 1,
             stage="recent_sealed", block=1, settings=settings, learn=False,
             odds=recent_odds_by_epoch, epochs=re,
         )
         _save_csv(output / "recent_sealed_results.csv", [
             asdict(r) for r in recent_rows
         ])
+        recent_by_id = {r.agent_id: r for r in recent_rows}
         summary["recent_test"] = {
-            "first_timestamp_ms": int(recent.timestamps[end_train]),
+            "first_timestamp_ms": int(recent.timestamps[max(32, end_train)]),
+            "warmup_skipped": max(32 - end_train, 0),
+            "adaptation_candles": max(0, end_train),
+            "sealed_candles_requested": recent_holdout,
+            "sealed_candles_evaluable": max(0, recent.size - 1 - max(32, end_train)),
+            "finalist_results": {
+                identifier: asdict(recent_by_id[identifier]) for identifier in finalists
+            },
             "last_timestamp_ms": int(recent.timestamps[-1]),
             "target": recent.target_name,
             "entries_evaluated_per_agent": {
