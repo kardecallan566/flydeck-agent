@@ -738,9 +738,12 @@ def run_evolution(
     (output / "summary.json").write_text(
         json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8",
     )
+    # Keep finalists consistent with the pre-recent frozen checkpoint, even
+    # when recent adaptation was requested for a separate warmup period.
+    frozen_by_id = {a["agent_id"]: a for a in checkpoint["agents"]}
     (output / "finalists.json").write_text(
         json.dumps([
-            {**_agent_details(a), "validation": asdict(by_val[a.agent_id]),
+            {**frozen_by_id[a.agent_id], "validation": asdict(by_val[a.agent_id]),
              "historical_audit": asdict(by_audit[a.agent_id])}
             for a in agents if a.agent_id in finalists
         ], indent=2) + "\n", encoding="utf-8",
