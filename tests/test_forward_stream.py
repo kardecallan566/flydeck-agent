@@ -183,3 +183,66 @@ def test_cumulative_replay_once_preserves_all_possible_labels(tmp_path):
             cumulative_inspected=True,
             resume_state=tmp_path / "some_previous_state.json",
         )
+
+def test_cumulative_cli_enforces_manifest_and_never_double_counts_equity(tmp_path, monkeypatch):
+    import sys
+    from flydeck import forward_cli
+
+    history, fly_cp, plain_cp = frozen_pair(tmp_path)
+    base = tmp_path / "batch1.csv"
+    new = tmp_path / "batch2.csv"
+    origin = history.timestamps[-1] + 300_000
+    to_csv(sample(95, origin), base)
+    to_csv(sample(40, origin + 95 * 300_000), new)
+    merged = tmp_path / "cumulative.csv"
+    manifest = append_closed_candles(base, new, merged)
+    previous_meta = tmp_path / "old.meta.json"
+    previous_meta.write_text(
+        json.dumps({
+            "symbol": "BNBUSDT", "interval": "5m",
+            "last_open_ms": history.timestamps[-1],
+        }), encoding="utf-8",
+    )
+    circuit = tmp_path / "synthetic_circuit.json"
+    circuit.write_text('{"test":true}', encoding="utf-8")
+    monkeypatch.setattr(
+        forward_cli, "fly_feature_cache",
+        lambda data, **kwargs: np.zeros(data.size, dtype=np.float32),
+    )
+    argv = [
+        "flydeck-forward", "--data", str(merged),
+        "--after-meta", str(previous_meta),
+        "--with-checkpoint", str(fly_cp),
+        "--without-checkpoint", str(plain_cp),
+        "--circuit", str(circuit),
+        "--cumulative-manifest", str(merged.with_suffix(".manifest.json")),
+        "--output", str(tmp_path / "result"),
+    ]
+    monkeypatch.setattr(sys, "argv", argv)
+    assert forward_cli.main() == 0
+    with (tmp_path / "result" / "with_fly" / "forward_summary.json").open() as f:
+        summary = json.load(f)
+    assert summary["cumulative_already_inspected"] is True
+    assert summary["independent_new_holdout"] is False
+    assert summary["actually_evaluable_observations"] == 102
+    assert summary["replayed_from_initial_frozen_checkpoint"] is True
+    with (tmp_path / "result" / "with_fly" / "forward_state.json").open() as f:
+        state = json.load(f)
+    assert state["cumulative_replay_source"] is True
+    monkeypatch.setattr(sys, "argv", argv + ["--resume-root", str(tmp_path / "result")])
+    with pytest.raises(SystemExit) as exc:
+        forward_cli.main()
+    assert exc.value.code == 2
+
+
+def test_no_entry_agents_get_null_active_accuracy_not_zero_accuracy():
+    from flydeck.forward_eval import _summary
+    rows = [{
+        "entered": 0, "accuracy": 0.0, "coverage": 0.0,
+        "window_return_pct": 0.0, "cumulative_return_pct": 0.0,
+        "max_drawdown": 0.0, "statistical_evidence": False,
+    } for _ in range(100)]
+    r = _summary(rows)
+    assert r["agents_without_entries"] == 100
+    assert r["median_accuracy_active_only"] is None
+    assert r["median_accuracy"] == 0.0  # retained only for CSV compatibility
