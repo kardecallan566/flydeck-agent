@@ -30,8 +30,15 @@ def main() -> int:
     parser.add_argument("--odds-snapshots", type=Path, help="Optional pre-lock quotes; only meaningful with official rounds")
     parser.add_argument("--decision-lead-seconds", type=int, default=30)
     parser.add_argument("--resume-root", type=Path, help="Previous forward run root for persistent paper equity")
+    parser.add_argument(
+        "--cumulative-manifest", type=Path,
+        help="Explicitly replay an append-only already-inspected forward stream. "
+             "Requires flydeck-append-candles manifest; never use --resume-root.",
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    if args.cumulative_manifest and args.resume_root:
+        parser.error("--cumulative-manifest replays ALL prior candles; never combine with --resume-root")
     if args.odds_snapshots and not args.pancake_rounds:
         parser.error("--odds-snapshots requires --pancake-rounds")
     if args.after_file:
@@ -54,7 +61,22 @@ def main() -> int:
         and fly_cp["circuit_sha256"] != sha256_file(args.circuit)):
         parser.error("MaleCNS circuit differs from the one used in frozen training")
 
+    if args.cumulative_manifest:
+        manifest = json.loads(args.cumulative_manifest.read_text(encoding="utf-8"))
+        if (manifest.get("schema_version") != 1
+            or manifest.get("cumulative_already_inspected") is not True
+            or manifest.get("cumulative_sha256") != sha256_file(args.data)):
+            parser.error("invalid cumulative manifest or CSV hash mismatch")
+    else:
+        manifest = None
+
     data = load_bnb_5m_csv(args.data)
+    if manifest is not None:
+        if (data.size != int(manifest["total_rows"])
+            or data.timestamps[0] != int(manifest["first_open_ms"])
+            or data.timestamps[-1] != int(manifest["last_open_ms"])
+            or int(manifest["first_new_open_ms"]) <= last_seen):
+            parser.error("cumulative dataset provenance/timestamps inconsistent with prior inspected file")
     alignment = None
     if args.pancake_rounds:
         alignment = align_pancake_rounds_to_market(
@@ -75,6 +97,7 @@ def main() -> int:
         after_timestamp_ms=last_seen, source_csv_sha256=sha,
         expect_fly=True, name="with_fly", alignment=alignment,
         odds_by_epoch=odds, trace_all=args.trace_all,
+        cumulative_inspected=manifest is not None,
         resume_state=(
             args.resume_root / "with_fly" / "forward_state.json"
             if args.resume_root else None
@@ -87,6 +110,7 @@ def main() -> int:
         after_timestamp_ms=last_seen, source_csv_sha256=sha,
         expect_fly=False, name="without_fly", alignment=alignment,
         odds_by_epoch=odds, trace_all=args.trace_all,
+        cumulative_inspected=manifest is not None,
         resume_state=(
             args.resume_root / "without_fly" / "forward_state.json"
             if args.resume_root else None
@@ -101,6 +125,7 @@ def main() -> int:
             after_timestamp_ms=last_seen, source_csv_sha256=sha,
             expect_fly=True, name="with_fly_signal_masked",
             alignment=alignment, odds_by_epoch=odds, trace_all=args.trace_all,
+            cumulative_inspected=manifest is not None,
             resume_state=(
                 args.resume_root / "with_fly_signal_masked" / "forward_state.json"
                 if args.resume_root else None
@@ -116,6 +141,9 @@ def main() -> int:
             f"median accuracy={row['median_accuracy']:.3%} "
             f"median coverage={row['median_coverage']:.1%}"
         )
+    if manifest is not None:
+        print("CUMULATIVE REPLAY: old inspected candles are INCLUDED. "
+              "Not a new independent holdout. Full model replay; no double-counted capital.")
     print("Review frozen_comparison.json and each arm's preselected_decisions.csv.")
     print("No model was trained or promoted using this holdout. NO REAL BETS.")
     return 0
