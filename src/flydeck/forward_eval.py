@@ -79,10 +79,66 @@ def _summary(rows: list[dict]) -> dict:
         "above_initial_capital": sum(r["cumulative_return_pct"] > 0 for r in rows),
         "median_window_return_pct": statistics.median(r["window_return_pct"] for r in rows),
         "median_accuracy": statistics.median(r["accuracy"] for r in rows),
+        "median_accuracy_active_only": (
+            statistics.median(r["accuracy"] for r in rows if r["entered"] > 0)
+            if any(r["entered"] > 0 for r in rows) else None
+        ),
+        "agents_without_entries": sum(r["entered"] == 0 for r in rows),
         "median_coverage": statistics.median(r["coverage"] for r in rows),
         "median_peak_to_trough_drawdown": statistics.median(r["max_drawdown"] for r in rows),
         "wilson_lower_above_scenario_break_even_count": sum(
             r["statistical_evidence"] for r in rows
+        ),
+    }
+
+
+def directional_baselines(
+    data: BNBPredictionDataset, y: np.ndarray, ready: np.ndarray,
+    settings: EvolutionSettings, *, variable_odds: bool,
+) -> dict:
+    """Honest unselective baselines on the SAME resolved timestamps.
+
+    Fixed payout returns are ONLY hypothetical; pre-lock variable payout
+    cannot be reconstructed from direction alone.
+    """
+    indices = [
+        i for i in range(32, data.size)
+        if y[i] >= 0 and ready[i] < data.size
+    ]
+    n = len(indices)
+    up = sum(int(y[i] == 1) for i in indices)
+    down = n - up
+    be = (1 + settings.gas_fraction_of_stake) / (
+        settings.scenario_gross_odds * (1 - settings.scenario_fee)
+    )
+    def policy(wins: int) -> dict:
+        return {
+            "entries": n, "accuracy": wins / n if n else None,
+            "hypothetical_return_pct": (
+                None if variable_odds or not n
+                else 100 * (
+                    (1 + settings.stake_fraction * (
+                        settings.scenario_gross_odds * (1 - settings.scenario_fee)
+                        - 1 - settings.gas_fraction_of_stake
+                    )) ** wins
+                    * (1 - settings.stake_fraction * (
+                        1 + settings.gas_fraction_of_stake
+                    )) ** (n - wins)
+                    - 1
+                )
+            ),
+        }
+    return {
+        "same_resolved_observations": n,
+        "always_up": policy(up),
+        "always_down": policy(down),
+        "always_wait_return_pct": 0.0,
+        "up_base_rate": up / n if n else None,
+        "fixed_payout_break_even_probability": be if not variable_odds else None,
+        "payout_note": (
+            "No economic baseline without per-decision actual final pool payouts."
+            if variable_odds else
+            "Hypothetical fixed 2x/fee/gas settings; NOT realizable PancakeSwap PnL."
         ),
     }
 
@@ -96,6 +152,7 @@ def frozen_forward_arm(
     odds_by_epoch: dict[int, tuple[float, float]] | None = None,
     resume_state: Path | None = None,
     trace_all: bool = False,
+    cumulative_inspected: bool = False,
 ) -> dict:
     """Fails closed on previously seen timestamps and non-frozen model state."""
     checkpoint, agents = load_checkpoint(checkpoint_file, expect_fly=expect_fly)
@@ -104,6 +161,10 @@ def frozen_forward_arm(
         raise ValueError("forward test requires at least 35 closed candles")
     if features.shape != (data.size, len(FEATURE_NAMES)):
         raise ValueError("feature matrix has the wrong dimensions")
+    if not np.all(np.isfinite(features)):
+        raise ValueError("forward features must all be finite")
+    if cumulative_inspected and resume_state is not None:
+        raise ValueError("cumulative replay already includes past candles: omit --resume-root")
     history_end = int(checkpoint["last_historical_candle_open_ms"])
     if data.timestamps[0] <= max(history_end, after_timestamp_ms):
         raise ValueError(
@@ -124,11 +185,15 @@ def frozen_forward_arm(
     # No training anywhere in forward: even WAIT outcomes are scored only.
     x = features
     y, ready, epochs = _labels(data, alignment)
+    config = EvolutionSettings(**checkpoint["settings"])
+    baseline = directional_baselines(
+        data, y, ready, config, variable_odds=odds_by_epoch is not None,
+    )
     trace: list[dict] = []
     state_out: dict[str, dict] = {}
     results = _block(
-        agents, x, y, ready, 32, data.size - 1, stage="new_forward",
-        block=0, settings=EvolutionSettings(**checkpoint["settings"]),
+        agents, x, y, ready, 32, data.size, stage="new_forward",
+        block=0, settings=config,
         learn=False, odds=odds_by_epoch, epochs=epochs,
         trace_rows=trace,
         trace_agents=(
@@ -172,7 +237,13 @@ def frozen_forward_arm(
             else "illustrative_scenario_not_actual_pnl"
         ),
         "new_candles": data.size,
+        "cumulative_already_inspected": cumulative_inspected,
+        "independent_new_holdout": not cumulative_inspected,
+        "replayed_from_initial_frozen_checkpoint": cumulative_inspected,
         "skipped_causal_warmup_candles": 32,
+        "actually_evaluable_observations": baseline["same_resolved_observations"],
+        "risk_threshold_feasible_this_window": baseline["same_resolved_observations"] >= config.min_entries,
+        "directional_baselines": baseline,
         "first_new_open_ms": int(data.timestamps[0]),
         "first_evaluated_open_ms": int(data.timestamps[32]),
         "last_downloaded_open_ms": int(data.timestamps[-1]),
@@ -190,6 +261,7 @@ def frozen_forward_arm(
     )
     next_state = {
         "schema_version": 1,
+        "cumulative_replay_source": cumulative_inspected,
         "arm": name, "checkpoint_sha256": cp_hash,
         "source_target": data.target_name,
         "last_test_candle_open_ms": int(data.timestamps[-1]),
