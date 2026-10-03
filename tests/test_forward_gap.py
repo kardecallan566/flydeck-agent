@@ -129,7 +129,7 @@ def test_latest_window_must_not_silently_skip_intermediate_candles(tmp_path):
     base = tmp_path / "old.csv"
     save(base, rows[:95])
     dest = tmp_path / "recent.csv"
-    with pytest.raises(ValueError, match="Gap after previous dataset: 103"):
+    with pytest.raises(ValueError, match="Gap after previous dataset: 105"):
         download_recent_closed(
             count=100, available=True, after_history=base,
             output=dest, provider=LatestFake(),
