@@ -50,6 +50,19 @@ def main() -> int:
     p.add_argument("--scenario-gross-odds", type=float, default=2.0)
     p.add_argument("--scenario-fee", type=float, default=0.03)
     p.add_argument("--gas-fraction-of-stake", type=float, default=0.0)
+    p.add_argument(
+        "--class-balance-alpha", type=float, default=0.0,
+        help="v4 opt-in: 0=original v3 SGD, 1=full online inverse-class weighting; "
+             "only labels resolved BEFORE gradient updates contribute",
+    )
+    p.add_argument(
+        "--class-weight-cap", type=float, default=1.0,
+        help="v4 opt-in: bound inverse-class weights to [1/cap,cap], range 1..3",
+    )
+    p.add_argument(
+        "--bias-l2-multiplier", type=float, default=1.0,
+        help="v4 opt-in: stronger regularization on the intercept, range 1..20",
+    )
     args = p.parse_args()
     if args.compare_no_fly and not args.circuit:
         p.error("--compare-no-fly requires --circuit")
@@ -82,11 +95,23 @@ def main() -> int:
         if args.recent_odds_snapshots:
             recent_odds = load_odds_snapshots(args.recent_odds_snapshots, recent_alignment)
 
+    if args.class_balance_alpha and args.class_weight_cap == 1.0:
+        p.error("--class-balance-alpha requires --class-weight-cap > 1")
+    if (args.class_balance_alpha or args.bias_l2_multiplier != 1):
+        print(
+            "EXPERIMENTAL v4 training: online settled-label weighting and "
+            "bias decay; v3 frozen checkpoint is NOT modified. "
+            "Historical audit/old recent period is ALREADY inspected."
+        )
+
     settings = EvolutionSettings(
         population=args.population, seed=args.seed, block_size=args.block_size,
         min_entries=args.min_entries, min_coverage=args.min_coverage,
         scenario_gross_odds=args.scenario_gross_odds, scenario_fee=args.scenario_fee,
         gas_fraction_of_stake=args.gas_fraction_of_stake,
+        class_balance_alpha=args.class_balance_alpha,
+        class_weight_cap=args.class_weight_cap,
+        bias_l2_multiplier=args.bias_l2_multiplier,
     )
     sealed_count = args.recent_holdout if args.recent_holdout is not None else (
         recent.size if recent is not None else 2016
