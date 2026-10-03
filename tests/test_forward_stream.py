@@ -100,9 +100,9 @@ def test_95_candle_result_is_62_resolved_not_61_and_has_honest_baselines(tmp_pat
     assert (result["directional_baselines"]["always_up"]["entries"] ==
             result["directional_baselines"]["always_down"]["entries"] == 62)
     assert result["directional_baselines"]["always_wait_return_pct"] == 0.0
-    assert not result["independent_new_holdout"] is False
+    assert result["independent_new_holdout"] is True
     assert all(
-        not row["statistical_evidence"]
+        row["statistical_evidence"] == "False"
         for row in csv.DictReader((tmp_path / "forward95" / "all_agents_forward.csv").open())
         if int(row["entered"]) < 1
     )
