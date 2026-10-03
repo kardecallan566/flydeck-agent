@@ -131,13 +131,19 @@ def test_three_arm_paired_diagnostic_no_entry_agents_excluded(tmp_path):
     )
     audit = diagnose(tmp_path / "run", output=tmp_path / "audit.json")
     assert audit["evaluated_opportunities"] == 62
-    assert audit["risk_threshold_possible_this_window"] is False  # audit reports the original production 80-entry target
+    assert audit["risk_threshold_possible_this_window"] is True  # synthetic fixture sets min_entries=1
+    assert audit["research_80_entry_minimum_possible"] is False
     assert audit["same_weight_neural_input_diagnostic"]["same_frozen_checkpoint_and_candles"]
     paired = audit["same_weight_neural_input_diagnostic"]["original_finalists_only"]
     assert paired["paired_decision_opportunities_correlated_across_agents"] == 5 * 62
     assert (paired["changed_direction_when_both_entered"] +
             paired["entry_vs_wait_disagreements"] == paired["changed_actions"])
+    assert 0 <= paired["mean_brier_signal_on"] <= 1
+    assert 0 <= paired["mean_brier_signal_masked"] <= 1
     for name in ("with_fly", "without_fly"):
+        cal = audit[name]["preselected_probability_calibration"]
+        assert cal["agent_time_observations_correlated"] == 5 * 62
+        assert cal["includes_wait_predictions"]
         arm = audit[name]["all"]
         assert arm["agents_without_entries"] + arm["agents_with_entries"] == 100
         assert arm["median_accuracy_among_active"] is None or 0 <= arm["median_accuracy_among_active"] <= 1
