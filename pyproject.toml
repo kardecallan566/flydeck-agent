@@ -27,6 +27,7 @@ flydeck-fetch-recent = "flydeck.recent_candles_cli:main"
 flydeck-forward = "flydeck.forward_cli:main"
 flydeck-append-candles = "flydeck.forward_append_cli:main"
 flydeck-diagnose = "flydeck.forward_diagnostics_cli:main"
+flydeck-fill-gap = "flydeck.forward_gap_cli:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
