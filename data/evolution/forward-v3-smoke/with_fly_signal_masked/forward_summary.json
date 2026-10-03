@@ -1,0 +1,45 @@
+{
+  "research_only": true,
+  "arm": "with_fly_signal_masked",
+  "checkpoint_sha256": "3dcaae164211020c4780e085932a648badd6851e2d79c31cb2c9b88df52e8627",
+  "source_target": "binance-close-t+1",
+  "cross_target_test": false,
+  "economic_mode": "illustrative_scenario_not_actual_pnl",
+  "new_candles": 95,
+  "skipped_causal_warmup_candles": 32,
+  "first_new_open_ms": 1790969400000,
+  "first_evaluated_open_ms": 1790979000000,
+  "last_downloaded_open_ms": 1790997600000,
+  "previously_inspected_last_open_ms": 1790969100000,
+  "source_csv_sha256": "64748f734a890468c010b5969fea16bd2e096bb8decd52e8fcb5641cae9d3372",
+  "evaluation_without_weight_updates": true,
+  "selected_before_forward": [
+    "G05-0067",
+    "G05-0035",
+    "G03-0043",
+    "G04-0003",
+    "G04-0052"
+  ],
+  "full_cohort": {
+    "agents": 100,
+    "positive_this_window": 36,
+    "above_initial_capital": 36,
+    "median_window_return_pct": 0.0,
+    "median_accuracy": 0.46802721088435373,
+    "median_coverage": 0.2,
+    "median_peak_to_trough_drawdown": 0.005988008000000031,
+    "wilson_lower_above_scenario_break_even_count": 0
+  },
+  "preselected_finalists": {
+    "agents": 5,
+    "positive_this_window": 0,
+    "above_initial_capital": 0,
+    "median_window_return_pct": 0.0,
+    "median_accuracy": 0.0,
+    "median_coverage": 0.0,
+    "median_peak_to_trough_drawdown": 0.0,
+    "wilson_lower_above_scenario_break_even_count": 0
+  },
+  "model_search_correction": "not_established",
+  "live_trading_approved": false
+}

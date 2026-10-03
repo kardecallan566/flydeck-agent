@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "research_only": true,
+  "gap_fill_not_independent_holdout": true,
+  "base_path": "data\\cache\\BNBUSDT_next_available_5m.csv",
+  "base_sha256": "64748f734a890468c010b5969fea16bd2e096bb8decd52e8fcb5641cae9d3372",
+  "later_path": "data\\cache\\BNBUSDT_batch02_5m.csv",
+  "later_sha256": "e7e6fef189779bd7c5e1adf9feed743914e28284dfd1e619ec5858835a0f9e7f",
+  "missing_candles_repaired": 105,
+  "first_gap_open_ms": 1790997900000,
+  "last_gap_open_ms": 1791029100000,
+  "first_gap_open_utc": "2026-10-03T03:25:00+00:00",
+  "last_gap_closed_utc": "2026-10-03T12:10:00+00:00",
+  "expected_next_open_ms": 1791029400000,
+  "source": "Binance public historic closed klines by start/end bounds",
+  "gap_sha256": "b6c5b9e2050df4c06c5dabbd16091073f812f3c13449a157fde5f0b1d301e95f"
+}

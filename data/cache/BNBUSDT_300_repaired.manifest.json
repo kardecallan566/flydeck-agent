@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "research_only": true,
+  "cumulative_already_inspected": true,
+  "not_a_new_independent_holdout": true,
+  "base_path": "data\\cache\\BNBUSDT_95_plus_gap.csv",
+  "new_path": "data\\cache\\BNBUSDT_batch02_5m.csv",
+  "base_sha256": "efeaaa802e3cbb708d8f32e32dd1b69e8f6fd1b0fbaa119d07a92fd1729ff905",
+  "new_sha256": "e7e6fef189779bd7c5e1adf9feed743914e28284dfd1e619ec5858835a0f9e7f",
+  "previous_rows": 200,
+  "new_rows": 100,
+  "total_rows": 300,
+  "first_open_ms": 1790969400000,
+  "last_open_ms": 1791059100000,
+  "first_new_open_ms": 1791029400000,
+  "expected_labelled_decisions": 267,
+  "causal_warmup_once": 32,
+  "replay_frozen_models_without_resume_state": true,
+  "cumulative_sha256": "6b6ede4711ca31da7e51d85ac3af995bb6b840c6dfe0f9519139b454978fb5f6"
+}

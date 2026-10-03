@@ -1,0 +1,609 @@
+{
+  "schema_version": 1,
+  "arm": "without_fly",
+  "checkpoint_sha256": "d992b3789a761bc04147ae287e8d16cbd2cbf4d06068566c670b3ddae543bd23",
+  "source_target": "binance-close-t+1",
+  "last_test_candle_open_ms": 1790997600000,
+  "agents": {
+    "G04-0021": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G04-0062": {
+      "equity": 100.188,
+      "peak": 100.188,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G04-0043": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G04-0044": {
+      "equity": 100.188,
+      "peak": 100.188,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G04-0045": {
+      "equity": 98.74700278712314,
+      "peak": 100.188,
+      "max_drawdown": 0.018828649355458738,
+      "halted": false
+    },
+    "G04-0026": {
+      "equity": 98.98163792681683,
+      "peak": 100.188,
+      "max_drawdown": 0.014892158420507054,
+      "halted": false
+    },
+    "G04-0071": {
+      "equity": 99.72808152027154,
+      "peak": 100.188,
+      "max_drawdown": 0.012917994409325768,
+      "halted": false
+    },
+    "G03-0048": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G04-0069": {
+      "equity": 100.3390903195591,
+      "peak": 100.3390903195591,
+      "max_drawdown": 0.0059880080000000455,
+      "halted": false
+    },
+    "G04-0050": {
+      "equity": 100.59214232055591,
+      "peak": 100.59214232055591,
+      "max_drawdown": 0.010695016540862232,
+      "halted": false
+    },
+    "G04-0072": {
+      "equity": 99.54094454452785,
+      "peak": 100.188,
+      "max_drawdown": 0.012917994409325768,
+      "halted": false
+    },
+    "G04-0052": {
+      "equity": 99.96504782485235,
+      "peak": 100.40338395871355,
+      "max_drawdown": 0.008589744490487832,
+      "halted": false
+    },
+    "G04-0073": {
+      "equity": 100.12819378262691,
+      "peak": 100.56724529421204,
+      "max_drawdown": 0.010939874157641078,
+      "halted": false
+    },
+    "G03-0043": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G04-0032": {
+      "equity": 99.72808152027154,
+      "peak": 100.188,
+      "max_drawdown": 0.012917994409325768,
+      "halted": false
+    },
+    "G04-0063": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G04-0003": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G04-0047": {
+      "equity": 101.09577077778195,
+      "peak": 101.09577077778195,
+      "max_drawdown": 0.004119265455040097,
+      "halted": false
+    },
+    "G03-0004": {
+      "equity": 100.188,
+      "peak": 100.188,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G03-0079": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0001": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0002": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0003": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0004": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0005": {
+      "equity": 99.13090897030352,
+      "peak": 100.188,
+      "max_drawdown": 0.016862374103666092,
+      "halted": false
+    },
+    "G05-0006": {
+      "equity": 100.55261505251977,
+      "peak": 100.56506098446721,
+      "max_drawdown": 0.001999999999999957,
+      "halted": false
+    },
+    "G05-0007": {
+      "equity": 99.32956810651656,
+      "peak": 100.188,
+      "max_drawdown": 0.012917994409325768,
+      "halted": false
+    },
+    "G05-0008": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0009": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0010": {
+      "equity": 99.19227395848725,
+      "peak": 100.188,
+      "max_drawdown": 0.010939874157641078,
+      "halted": false
+    },
+    "G05-0011": {
+      "equity": 98.51292384805346,
+      "peak": 100.188,
+      "max_drawdown": 0.023474852786305202,
+      "halted": false
+    },
+    "G05-0012": {
+      "equity": 98.93264715236295,
+      "peak": 100.188,
+      "max_drawdown": 0.018828649355458596,
+      "halted": false
+    },
+    "G05-0013": {
+      "equity": 100.47797180064327,
+      "peak": 100.47797180064327,
+      "max_drawdown": 0.006111026924129936,
+      "halted": false
+    },
+    "G05-0014": {
+      "equity": 98.53517207452352,
+      "peak": 100.0,
+      "max_drawdown": 0.018342779971351034,
+      "halted": false
+    },
+    "G05-0015": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0016": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0017": {
+      "equity": 98.6981281448878,
+      "peak": 100.188,
+      "max_drawdown": 0.02151788856343217,
+      "halted": false
+    },
+    "G05-0018": {
+      "equity": 98.90816085884538,
+      "peak": 100.188,
+      "max_drawdown": 0.020790992056747892,
+      "halted": false
+    },
+    "G05-0019": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0020": {
+      "equity": 99.8,
+      "peak": 100.0,
+      "max_drawdown": 0.0020000000000000282,
+      "halted": false
+    },
+    "G05-0021": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0022": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0023": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0024": {
+      "equity": 100.90606737112424,
+      "peak": 100.90606737112424,
+      "max_drawdown": 0.004119265455040097,
+      "halted": false
+    },
+    "G05-0025": {
+      "equity": 99.388897307587,
+      "peak": 100.188,
+      "max_drawdown": 0.007976031984000091,
+      "halted": false
+    },
+    "G05-0026": {
+      "equity": 99.88867112361547,
+      "peak": 100.0,
+      "max_drawdown": 0.004858537889365095,
+      "halted": false
+    },
+    "G05-0027": {
+      "equity": 98.7103445371277,
+      "peak": 100.188,
+      "max_drawdown": 0.02151788856343217,
+      "halted": false
+    },
+    "G05-0028": {
+      "equity": 100.36393086249828,
+      "peak": 100.37635344,
+      "max_drawdown": 0.0019999999999999593,
+      "halted": false
+    },
+    "G05-0029": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0030": {
+      "equity": 100.3785336509483,
+      "peak": 100.56506098446721,
+      "max_drawdown": 0.014526317031760603,
+      "halted": false
+    },
+    "G05-0031": {
+      "equity": 100.8810926468601,
+      "peak": 100.8810926468601,
+      "max_drawdown": 0.004119265455040075,
+      "halted": false
+    },
+    "G05-0032": {
+      "equity": 99.54094454452782,
+      "peak": 100.19017611984296,
+      "max_drawdown": 0.010939874157641078,
+      "halted": false
+    },
+    "G05-0033": {
+      "equity": 101.0979666147368,
+      "peak": 101.96127603949188,
+      "max_drawdown": 0.008467032370413784,
+      "halted": false
+    },
+    "G05-0034": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0035": {
+      "equity": 101.31310626026806,
+      "peak": 102.15296323844612,
+      "max_drawdown": 0.008221562562190806,
+      "halted": false
+    },
+    "G05-0036": {
+      "equity": 99.6004,
+      "peak": 100.0,
+      "max_drawdown": 0.003996000000000066,
+      "halted": false
+    },
+    "G05-0037": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0038": {
+      "equity": 100.90606737112424,
+      "peak": 100.90606737112424,
+      "max_drawdown": 0.004119265455040097,
+      "halted": false
+    },
+    "G05-0039": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0040": {
+      "equity": 100.40338395871353,
+      "peak": 100.40338395871353,
+      "max_drawdown": 0.01069501654086227,
+      "halted": false
+    },
+    "G05-0041": {
+      "equity": 100.79372978011617,
+      "peak": 100.8062055561158,
+      "max_drawdown": 0.006479992355123926,
+      "halted": false
+    },
+    "G05-0042": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0043": {
+      "equity": 100.00217203641454,
+      "peak": 100.56506098446721,
+      "max_drawdown": 0.016497264397697064,
+      "halted": false
+    },
+    "G05-0044": {
+      "equity": 98.75922522883747,
+      "peak": 100.188,
+      "max_drawdown": 0.018828649355458738,
+      "halted": false
+    },
+    "G05-0045": {
+      "equity": 100.19017611984296,
+      "peak": 100.39095803591479,
+      "max_drawdown": 0.010939874157641078,
+      "halted": false
+    },
+    "G05-0046": {
+      "equity": 98.58610730166126,
+      "peak": 100.0,
+      "max_drawdown": 0.017470589102561718,
+      "halted": false
+    },
+    "G05-0047": {
+      "equity": 98.51292384805346,
+      "peak": 100.188,
+      "max_drawdown": 0.023474852786305202,
+      "halted": false
+    },
+    "G05-0048": {
+      "equity": 100.188,
+      "peak": 100.188,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0049": {
+      "equity": 101.05824058512748,
+      "peak": 101.05824058512748,
+      "max_drawdown": 0.004242515654747218,
+      "halted": false
+    },
+    "G05-0050": {
+      "equity": 99.28040512467844,
+      "peak": 100.37635344,
+      "max_drawdown": 0.014892158420506809,
+      "halted": false
+    },
+    "G05-0051": {
+      "equity": 101.55383878043806,
+      "peak": 102.17825283457067,
+      "max_drawdown": 0.00611102692412991,
+      "halted": false
+    },
+    "G05-0052": {
+      "equity": 100.71671993764147,
+      "peak": 100.71671993764147,
+      "max_drawdown": 0.005988008000000031,
+      "halted": false
+    },
+    "G05-0053": {
+      "equity": 98.47635249613113,
+      "peak": 100.188,
+      "max_drawdown": 0.025427903080732627,
+      "halted": false
+    },
+    "G05-0054": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0055": {
+      "equity": 99.76511772920266,
+      "peak": 100.188,
+      "max_drawdown": 0.010939874157641078,
+      "halted": false
+    },
+    "G05-0056": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0057": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0058": {
+      "equity": 99.50399155631656,
+      "peak": 100.188,
+      "max_drawdown": 0.016862374103666092,
+      "halted": false
+    },
+    "G05-0059": {
+      "equity": 100.56506098446721,
+      "peak": 100.56506098446721,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0060": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0061": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0062": {
+      "equity": 99.987624,
+      "peak": 100.188,
+      "max_drawdown": 0.0020000000000000564,
+      "halted": false
+    },
+    "G05-0063": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0064": {
+      "equity": 100.188,
+      "peak": 100.188,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0065": {
+      "equity": 98.47635249613113,
+      "peak": 100.188,
+      "max_drawdown": 0.025427903080732627,
+      "halted": false
+    },
+    "G05-0066": {
+      "equity": 98.67369989592297,
+      "peak": 100.188,
+      "max_drawdown": 0.025427903080732627,
+      "halted": false
+    },
+    "G05-0067": {
+      "equity": 99.52862535723102,
+      "peak": 100.188,
+      "max_drawdown": 0.012917994409325768,
+      "halted": false
+    },
+    "G05-0068": {
+      "equity": 100.74165396881851,
+      "peak": 100.754123299118,
+      "max_drawdown": 0.002000000000000014,
+      "halted": false
+    },
+    "G05-0069": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0070": {
+      "equity": 100.89357923622639,
+      "peak": 100.89357923622639,
+      "max_drawdown": 0.004119265455040005,
+      "halted": false
+    },
+    "G05-0071": {
+      "equity": 100.56724529421209,
+      "peak": 100.79372978011617,
+      "max_drawdown": 0.008589744490487832,
+      "halted": false
+    },
+    "G05-0072": {
+      "equity": 100.90606737112424,
+      "peak": 100.90606737112424,
+      "max_drawdown": 0.005988008000000031,
+      "halted": false
+    },
+    "G05-0073": {
+      "equity": 99.75277079823246,
+      "peak": 100.36611080362363,
+      "max_drawdown": 0.012917994409325768,
+      "halted": false
+    },
+    "G05-0074": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0075": {
+      "equity": 101.02072432495846,
+      "peak": 101.03322819728017,
+      "max_drawdown": 0.003996000000000066,
+      "halted": false
+    },
+    "G05-0076": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0077": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0078": {
+      "equity": 100.188,
+      "peak": 100.188,
+      "max_drawdown": 0.0,
+      "halted": false
+    },
+    "G05-0079": {
+      "equity": 100.55261505251977,
+      "peak": 100.55261505251977,
+      "max_drawdown": 0.0019999999999999593,
+      "halted": false
+    },
+    "G05-0080": {
+      "equity": 100.0,
+      "peak": 100.0,
+      "max_drawdown": 0.0,
+      "halted": false
+    }
+  }
+}

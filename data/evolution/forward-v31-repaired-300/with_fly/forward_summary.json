@@ -1,0 +1,74 @@
+{
+  "research_only": true,
+  "arm": "with_fly",
+  "checkpoint_sha256": "3dcaae164211020c4780e085932a648badd6851e2d79c31cb2c9b88df52e8627",
+  "source_target": "binance-close-t+1",
+  "cross_target_test": false,
+  "economic_mode": "illustrative_scenario_not_actual_pnl",
+  "new_candles": 300,
+  "cumulative_already_inspected": true,
+  "independent_new_holdout": false,
+  "replayed_from_initial_frozen_checkpoint": true,
+  "skipped_causal_warmup_candles": 32,
+  "actually_evaluable_observations": 265,
+  "risk_threshold_feasible_this_window": true,
+  "risk_min_entries": 80,
+  "risk_min_coverage": 0.05,
+  "risk_max_drawdown": 0.25,
+  "directional_baselines": {
+    "same_resolved_observations": 265,
+    "always_up": {
+      "entries": 265,
+      "accuracy": 0.5735849056603773,
+      "hypothetical_return_pct": 6.1056829076052255
+    },
+    "always_down": {
+      "entries": 265,
+      "accuracy": 0.42641509433962266,
+      "hypothetical_return_pct": -8.7953086155646
+    },
+    "always_wait_return_pct": 0.0,
+    "up_base_rate": 0.5735849056603773,
+    "fixed_payout_break_even_probability": 0.5154639175257733,
+    "payout_note": "Hypothetical fixed 2x/fee/gas settings; NOT realizable PancakeSwap PnL."
+  },
+  "first_new_open_ms": 1790969400000,
+  "first_evaluated_open_ms": 1790979000000,
+  "last_downloaded_open_ms": 1791059100000,
+  "previously_inspected_last_open_ms": 1790969100000,
+  "source_csv_sha256": "6b6ede4711ca31da7e51d85ac3af995bb6b840c6dfe0f9519139b454978fb5f6",
+  "evaluation_without_weight_updates": true,
+  "selected_before_forward": [
+    "G05-0067",
+    "G05-0035",
+    "G03-0043",
+    "G04-0003",
+    "G04-0052"
+  ],
+  "full_cohort": {
+    "agents": 100,
+    "positive_this_window": 3,
+    "above_initial_capital": 3,
+    "median_window_return_pct": -2.106194122303151,
+    "median_accuracy": 0.4355413105413105,
+    "median_accuracy_active_only": 0.4355413105413105,
+    "agents_without_entries": 0,
+    "median_coverage": 0.2849056603773585,
+    "median_peak_to_trough_drawdown": 0.03427744762503307,
+    "wilson_lower_above_scenario_break_even_count": 0
+  },
+  "preselected_finalists": {
+    "agents": 5,
+    "positive_this_window": 1,
+    "above_initial_capital": 1,
+    "median_window_return_pct": -0.7463230665717746,
+    "median_accuracy": 0.4666666666666667,
+    "median_accuracy_active_only": 0.4666666666666667,
+    "agents_without_entries": 0,
+    "median_coverage": 0.11320754716981132,
+    "median_peak_to_trough_drawdown": 0.01279581801976391,
+    "wilson_lower_above_scenario_break_even_count": 0
+  },
+  "model_search_correction": "not_established",
+  "live_trading_approved": false
+}
