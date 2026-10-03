@@ -126,14 +126,19 @@ def download_recent_closed(
     if history_last is not None and oldest <= history_last:
         # Defense in depth; source selection above already excludes overlap.
         raise ValueError("download overlaps historical candles")
-    # If --available is used on a short elapsed window, missing intermediate
-    # Binance candles are NOT silently ignored (dataset_from_candles checks
-    # spacing; the old-to-new boundary must also be consecutive).
-    if (history_last is not None and available and available_now < count
-        and oldest != history_last + INTERVAL_MS):
+    # Check the old-to-new boundary in BOTH regular and --available mode.
+    # The prior implementation checked only a partial --available response.
+    # If 100+ candles elapsed, selecting the last 100 silently skipped older
+    # unseen candles even though every timestamp in the selected file was new.
+    if history_last is not None and oldest != history_last + INTERVAL_MS:
+        missing = (oldest - history_last) // INTERVAL_MS - 1
         raise ValueError(
-            "Gap after previous dataset or insufficient API history. "
-            "Cannot treat these candles as a contiguous new window."
+            f"Gap after previous dataset: {missing} five-minute candles "
+            f"were skipped between {_utc(history_last + INTERVAL_MS)} and "
+            f"{_utc(oldest)}. No file was written. "
+            "Use flydeck-fill-gap with your previous CSV and an already "
+            "downloaded later CSV, or fetch a sufficiently large window "
+            "that starts exactly at the old file's next five-minute candle."
         )
     result = {
         "symbol": "BNBUSDT", "interval": "5m",
