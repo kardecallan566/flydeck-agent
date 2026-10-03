@@ -194,6 +194,10 @@ class EvolutionSettings:
     scenario_fee: float = 0.03
     gas_fraction_of_stake: float = 0.0
     finalists: int = 5
+    # v4 opt-in research controls. Zero/1/1 preserves v3 behavior exactly.
+    class_balance_alpha: float = 0.0
+    class_weight_cap: float = 1.0
+    bias_l2_multiplier: float = 1.0
 
     def __post_init__(self) -> None:
         if not (10 <= self.population <= 300 and self.population % 10 == 0):
@@ -204,6 +208,12 @@ class EvolutionSettings:
             raise ValueError("invalid risk limits")
         if not (0 <= self.scenario_fee < 1 and self.scenario_gross_odds > 1):
             raise ValueError("invalid payout assumptions")
+        if not (0 <= self.class_balance_alpha <= 1):
+            raise ValueError("class_balance_alpha must be between 0 and 1")
+        if not (1 <= self.class_weight_cap <= 3):
+            raise ValueError("class_weight_cap must be between 1 and 3")
+        if not (1 <= self.bias_l2_multiplier <= 20):
+            raise ValueError("bias_l2_multiplier must be between 1 and 20")
         if min(self.block_size, self.min_entries, self.warmup_blocks,
                self.development_blocks, self.validation_blocks, self.audit_blocks) < 1:
             raise ValueError("block sizes and phase counts must be positive")
@@ -348,6 +358,10 @@ def _block(
             halted[j] = bool(prev["halted"])
     eligible = 0
     pending: list[tuple[int, np.ndarray, np.ndarray, float]] = []
+    # Each block starts with symmetric pseudocounts. ONLY RESOLVED past
+    # outcomes update these counts; validation/audit never rebalance/learn.
+    # Weighting affects training gradients, not economic selection metrics.
+    class_counts = np.ones(2, dtype=np.float64)
     odds_default = (settings.scenario_gross_odds, settings.scenario_gross_odds)
     for i in range(start, stop):
         # All queued labels become learnable only after their resolution time.
@@ -355,9 +369,25 @@ def _block(
             due = [event for event in pending if event[0] <= i]
             pending = [event for event in pending if event[0] > i]
             for _, feature, probability, target in due:
-                gradient = (target - probability)[:, None] * feature[None, :] * masks
-                weights += lr[:, None] * (gradient - l2[:, None] * weights)
+                observed_class = int(target)
+                if settings.class_balance_alpha:
+                    inverse = class_counts.sum() / (2.0 * class_counts[observed_class])
+                    bounded = float(np.clip(
+                        inverse, 1.0 / settings.class_weight_cap, settings.class_weight_cap
+                    ))
+                    multiplier = 1.0 + settings.class_balance_alpha * (bounded - 1.0)
+                else:
+                    multiplier = 1.0
+                gradient = (
+                    multiplier * (target - probability)[:, None]
+                    * feature[None, :] * masks
+                )
+                regularizer = l2[:, None] * weights
+                if settings.bias_l2_multiplier != 1:
+                    regularizer[:, 0] *= settings.bias_l2_multiplier
+                weights += lr[:, None] * (gradient - regularizer)
                 np.clip(weights, -3, 3, out=weights)
+                class_counts[observed_class] += 1
 
         if y[i] < 0 or ready[i] >= stop:
             continue
@@ -665,6 +695,15 @@ def run_evolution(
         "note": "Historical audit was previously examined; do not treat it as a fresh independent test.",
         "recent_test": "not_supplied",
         "male_cns_cache_version": FLY_CACHE_VERSION if fly_signal is not None else None,
+        "training_hypothesis": (
+            "v4_explicit_opt_in_past_resolved_class_balance_and_bias_decay"
+            if settings.class_balance_alpha or settings.bias_l2_multiplier != 1
+            else "v3_original_unmodified_learning"
+        ),
+        "model_selection_note": (
+            "v4 candidate uses historical development only; do not promote based "
+            "on already-inspected audit/300-candle diagnostics."
+        ),
     }
 
     # Save the FROZEN, auditable model state BEFORE any optional recent adaptation.
