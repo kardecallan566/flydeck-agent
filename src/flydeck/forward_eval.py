@@ -282,7 +282,11 @@ def summarize_frozen_comparison(
     if treatment["source_csv_sha256"] != control["source_csv_sha256"]:
         raise ValueError("control and treatment evaluated different candle files")
     keys = ("positive_this_window", "median_window_return_pct",
-            "median_accuracy", "median_coverage")
+            "median_accuracy", "median_accuracy_active_only",
+            "agents_without_entries", "median_coverage")
+    def difference(left: dict, right: dict, key: str) -> float | None:
+        a, b = left[key], right[key]
+        return float(a) - float(b) if a is not None and b is not None else None
     t, c = treatment["full_cohort"], control["full_cohort"]
     report = {
         "research_only": True,
@@ -290,12 +294,14 @@ def summarize_frozen_comparison(
         "new_data_sha256": treatment["source_csv_sha256"],
         "with_fly": treatment,
         "without_fly": control,
-        "with_minus_without": {key: t[key] - c[key] for key in keys},
+        "with_minus_without": {key: difference(t, c, key) for key in keys},
         "note": (
             "Differences across evolved populations do not prove causal contribution. "
             "The optional masked-signal arm uses the exact same Fly-trained agents, "
             "with the Fly input replaced by zero; an out-of-distribution diagnostic."
         ),
+        "legacy_median_accuracy_includes_wait_agents_as_zero": True,
+        "prefer_median_accuracy_active_only_and_per_action_brier": True,
         "does_not_establish_economic_edge": True,
     }
     if masked_signal is not None:
@@ -304,7 +310,7 @@ def summarize_frozen_comparison(
         mt = masked_signal["full_cohort"]
         report["fly_trained_signal_masked"] = masked_signal
         report["signal_present_minus_masked_on_same_agents"] = {
-            key: t[key] - mt[key] for key in keys
+            key: difference(t, mt, key) for key in keys
         }
     output.mkdir(parents=True, exist_ok=True)
     (output / "frozen_comparison.json").write_text(
