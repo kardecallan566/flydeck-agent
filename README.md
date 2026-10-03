@@ -186,6 +186,14 @@ The FlyDeck Agent is not currently intended to:
 - Prefer structural explanations over blind parameter searches.
 - Keep memory, compute and dependencies small.
 
+## Next test — repair the 105-candle gap before the weekly monitor
+
+See [NEXT_TEST_300_CANDLES.md](docs/NEXT_TEST_300_CANDLES.md)
+for the complete, lossless process: recover the exact historical
+03:25–12:05 UTC gap, assemble 300 contiguous candles without overwriting
+existing files, and evaluate all original frozen agents. This is an
+already-inspected rolling diagnostic, **not** a fresh sealed holdout.
+
 ## Evolution v3.1 — continuous research and honest audits
 
 Start with [EVOLUTION_V31_CONTINUOUS.md](docs/EVOLUTION_V31_CONTINUOUS.md):
