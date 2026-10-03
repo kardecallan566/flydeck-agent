@@ -186,6 +186,14 @@ The FlyDeck Agent is not currently intended to:
 - Prefer structural explanations over blind parameter searches.
 - Keep memory, compute and dependencies small.
 
+## Evolution v3.1 — continuous research and honest audits
+
+Start with [EVOLUTION_V31_CONTINUOUS.md](docs/EVOLUTION_V31_CONTINUOUS.md):
+offline analysis of the existing 95-candle smoke run (no new candles required);
+WAIT-safe accuracy and probability calibration; append-only, strictly
+non-overlapping candle streams; and cumulative replay of the original
+frozen model checkpoints without double-counting paper capital.
+
 ## Evolution v3 — frozen prospective test
 
 See [EVOLUTION_V3_FORWARD.md](docs/EVOLUTION_V3_FORWARD.md) to reproduce the 100-agent controlled ablation with a fully frozen shared MaleCNS, export all model checkpoints and evaluate NEW Binance candles without retraining or real-money execution.
