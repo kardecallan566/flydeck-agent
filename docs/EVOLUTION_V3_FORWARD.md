@@ -71,6 +71,36 @@ flydeck-fetch-recent `
   --output data/cache/BNBUSDT_next_5m.csv
 ```
 
+The downloader **first filters out all previously inspected timestamps**, then
+selects only newly closed, gap-free 5m candles. When fewer than
+`--count` new candles exist it reports the **exact available count**
+from the exchange response and the expected UTC time of the
+requested target; it exits cleanly **without writing any file**.
+
+For an early functional smoke test, explicitly opt in to a smaller
+set instead of requesting nonexistent data:
+
+```powershell
+flydeck-fetch-recent `
+  --count 100 `
+  --available `
+  --min-count 35 `
+  --after-history data/cache/BNBUSDT_recent_5m.csv `
+  --output data/cache/BNBUSDT_next_available_5m.csv
+```
+
+The actual CSV contains the new candles available up to 100, NEVER
+previously inspected ones. Even the minimum 35 contains only 2
+evaluable predictions after the 32-candle warmup and final unresolved
+row. This is a plumbing smoke test, NOT a performance estimate.
+If fewer than 35 exist, the downloader reports the count without
+writing a CSV. Request 100 without `--available` when enough new
+candles have closed; request 2000 for the real next-week holdout.
+
+**Do not run the 100-candle smoke dataset as an independent 2000-candle
+holdout later.** Once examined, those observations cease being unseen;
+use a later non-overlapping dataset for the actual study.
+
 The downloader verifies closed, gap-free, nonoverlapping 5m candles.
 As the previous file ends October 2, 2026 19:30 UTC, this command
 cannot legitimately produce a full 2,000 *new* candles until nearly
