@@ -138,7 +138,9 @@ def main() -> int:
         print(
             f"{label}: positive={row['positive_this_window']}/{row['agents']} "
             f"median window return={row['median_window_return_pct']:.3f}% "
-            f"median accuracy={row['median_accuracy']:.3%} "
+            f"median accuracy ACTIVE="
+            f"{row['median_accuracy_active_only']:.3%} "
+            f"({row['agents_without_entries']} agents entered zero times) "
             f"median coverage={row['median_coverage']:.1%}"
         )
     if manifest is not None:
