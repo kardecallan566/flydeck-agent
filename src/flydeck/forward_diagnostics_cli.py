@@ -33,6 +33,43 @@ def _median(values: list[float]) -> float | None:
     return statistics.median(values) if values else None
 
 
+def _prediction_calibration(rows: list[dict]) -> dict:
+    """Brier score from timestamped ORIGINAL finalist predictions, including WAIT.
+
+    A Brier score evaluates probabilities instead of trade-threshold decisions.
+    Each finalist sees the same market times; this is a DESCRIPTIVE diagnostic,
+    NOT n independent samples or a p-value.
+    """
+    by_agent: dict[str, list[float]] = defaultdict(list)
+    all_rows = 0
+    up_count = 0
+    probs = []
+    for r in rows:
+        p = float(r["p_up"])
+        y = 1.0 if r["resolved_outcome"] == "UP" else 0.0
+        if not 0 <= p <= 1:
+            raise ValueError("p_up in decision trace outside [0, 1]")
+        all_rows += 1
+        up_count += int(y)
+        probs.append(p)
+        by_agent[r["agent_id"]].append((p - y) ** 2)
+    return {
+        "finalists": len(by_agent),
+        "agent_time_observations_correlated": all_rows,
+        "up_base_rate_over_repeated_finalist_observations": (
+            up_count / all_rows if all_rows else None
+        ),
+        "mean_p_up": statistics.mean(probs) if probs else None,
+        "median_agent_brier": _median(
+            [statistics.mean(x) for x in by_agent.values()]
+        ),
+        "unconditional_half_probability_brier": 0.25,
+        "brier_lower_is_better": True,
+        "includes_wait_predictions": True,
+        "selection_or_hypothesis_test_performed": False,
+    }
+
+
 def arm_audit(folder: Path) -> dict:
     results = _csv(folder / "all_agents_forward.csv")
     meta = json.loads((folder / "forward_summary.json").read_text(encoding="utf-8"))
@@ -70,12 +107,18 @@ def arm_audit(folder: Path) -> dict:
         "source_sha256": meta["source_csv_sha256"],
         "checkpoint_sha256": meta["checkpoint_sha256"],
         "new_candles": meta["new_candles"],
+        "risk_min_entries": int(meta.get("risk_min_entries", 80)),
+        "cumulative_already_inspected": meta.get("cumulative_already_inspected", False),
         "eligible_maximum": max((int(a["eligible"]) for a in results), default=0),
         "frozen_weights": meta["evaluation_without_weight_updates"],
         "all": group(results),
         "preselected_validation_finalists": group(preselected),
         "risk_participation_threshold_met": len(paid),
         "families": {k: group(v) for k, v in sorted(by_family.items())},
+        "preselected_probability_calibration": _prediction_calibration(
+            _csv(folder / "preselected_decisions.csv")
+        ),
+        "directional_baselines": meta.get("directional_baselines"),
         "preselected_rows": [
             {
                 "agent_id": a["agent_id"], "family": a["family"],
@@ -133,8 +176,17 @@ def paired_same_weights(treated: Path, masked: Path) -> dict:
         raise ValueError("paired final candidates have mismatched observation timestamps")
     changed = directional = both_enter = other = 0
     first_entries = second_entries = 0
+    brier_treated = brier_masked = 0.0
+    changed_predictions = 0
     for key in tr:
         x, y = tr[key], mr[key]
+        if x["resolved_outcome"] != y["resolved_outcome"]:
+            raise ValueError("paired finalist actions have different settled labels")
+        truth = 1.0 if x["resolved_outcome"] == "UP" else 0.0
+        px, py = float(x["p_up"]), float(y["p_up"])
+        brier_treated += (px - truth) ** 2
+        brier_masked += (py - truth) ** 2
+        changed_predictions += abs(px - py) > 1e-9
         first_entries += x["action"] != "WAIT"
         second_entries += y["action"] != "WAIT"
         if x["action"] != y["action"]:
@@ -160,6 +212,12 @@ def paired_same_weights(treated: Path, masked: Path) -> dict:
             "both_entered": both_enter,
             "entries_signal_on": first_entries,
             "entries_signal_masked": second_entries,
+            "different_p_up_at_1e_9": changed_predictions,
+            "mean_brier_signal_on": brier_treated / len(tr) if tr else None,
+            "mean_brier_signal_masked": brier_masked / len(tr) if tr else None,
+            "mean_brier_delta_on_minus_masked": (
+                (brier_treated - brier_masked) / len(tr) if tr else None
+            ),
         },
         "per_agent_exploratory": diffs,
         "limitation": (
@@ -178,13 +236,18 @@ def diagnose(root: Path, *, output: Path | None = None) -> dict:
     masked_dir = root / "with_fly_signal_masked"
     paired = paired_same_weights(root / "with_fly", masked_dir) if masked_dir.exists() else None
     eligible = min(with_arm["eligible_maximum"], without["eligible_maximum"])
+    risk_min_entries = max(
+        with_arm.get("risk_min_entries", 80),
+        without.get("risk_min_entries", 80),
+    )
     report = {
         "research_only": True,
         "root": str(root),
         "source_sha256": with_arm["source_sha256"],
         "evaluated_opportunities": eligible,
-        "minimum_required_entries_for_risk_survival": 80,
-        "risk_threshold_possible_this_window": eligible >= 80,
+        "minimum_required_entries_for_risk_survival": risk_min_entries,
+        "risk_threshold_possible_this_window": eligible >= risk_min_entries,
+        "research_80_entry_minimum_possible": eligible >= 80,
         "with_fly": with_arm,
         "without_fly": without,
         "same_weight_neural_input_diagnostic": paired,
