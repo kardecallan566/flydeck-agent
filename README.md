@@ -186,6 +186,17 @@ The FlyDeck Agent is not currently intended to:
 - Prefer structural explanations over blind parameter searches.
 - Keep memory, compute and dependencies small.
 
+## Experimental v4 — historical drift audit and opt-in balanced learning
+
+The [v4 experimental guide](docs/EXPERIMENTAL_V4.md) shows how to:
+audit the original ~70k-candle historical distribution against the
+already-inspected 300-candle forward run; verify the MaleCNS cache and
+actual final-candidate effective neural weights; train optional v4
+resolved-label-only class weighting and intercept regularization; run
+matched Fly/no-Fly multi-seed experiments locally on Windows without
+overwriting frozen v3 models. A subsequent truly NEW window, not the
+300 previously inspected candles, must evaluate any v4 hypothesis.
+
 ## Next test — repair the 105-candle gap before the weekly monitor
 
 See [NEXT_TEST_300_CANDLES.md](docs/NEXT_TEST_300_CANDLES.md)
