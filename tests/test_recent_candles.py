@@ -1,5 +1,4 @@
 """Mock-only unit tests for public Binance paginated closed-candle downloader."""
-from dataclasses import replace
 import pytest
 
 from flydeck.data.market_data import MarketCandle
@@ -56,7 +55,7 @@ def test_overlap_rejected_without_overwriting_file(tmp_path):
     old = tmp_path / "old.csv"
     write_csv(historic, old)
     # Recent count 2000 from 2050 starts at index 49, overlapping old.
-    with pytest.raises(ValueError, match="overlaps"):
+    with pytest.raises(ValueError, match="overlap"):
         download_recent_closed(
             count=2000, output=tmp_path / "recent.csv",
             after_history=old, provider=FakeProvider(candles),
@@ -74,3 +73,91 @@ def test_missing_candle_detected(tmp_path):
             provider=FakeProvider(candles),
             now_ms=candles[-2].timestamp + INTERVAL_MS + 10_000,
         )
+
+def test_short_new_window_gives_counts_deadline_no_partial_file(tmp_path):
+    from flydeck.data.market_data import dataset_from_candles
+    from flydeck.data.market_cache import write_csv
+    candles = rows(230)
+    old = dataset_from_candles(
+        candles[:180], symbol="BNBUSDT", interval="5m",
+        source="fixture", interval_ms=INTERVAL_MS,
+    )
+    hist = tmp_path / "recent_old.csv"
+    write_csv(old, hist)
+    clock = candles[-2].timestamp + INTERVAL_MS + 1000
+    with pytest.raises(ValueError, match=r"Only 49 of the 100 requested.*Expected 100"):
+        download_recent_closed(
+            count=100, output=tmp_path / "new.csv",
+            after_history=hist, provider=FakeProvider(candles),
+            now_ms=clock,
+        )
+    assert not (tmp_path / "new.csv").exists()
+
+
+def test_explicit_available_download_never_overlaps_and_reports_partial(tmp_path):
+    from flydeck.data.market_data import dataset_from_candles
+    from flydeck.data.market_cache import write_csv, read_csv
+    candles = rows(230)
+    hist = tmp_path / "prior.csv"
+    old = dataset_from_candles(
+        candles[:180], symbol="BNBUSDT", interval="5m",
+        source="fixture", interval_ms=INTERVAL_MS,
+    )
+    write_csv(old, hist)
+    clock = candles[-2].timestamp + INTERVAL_MS + 1000
+    path = tmp_path / "new.csv"
+    info = download_recent_closed(
+        count=100, output=path, after_history=hist,
+        provider=FakeProvider(candles), now_ms=clock,
+        available=True, min_count=35,
+    )
+    assert info["count"] == 49
+    assert info["requested_count"] == 100
+    assert info["available_after_history_in_requested_window"] == 49
+    assert info["partial_download_explicit"]
+    read = read_csv(path, symbol="BNBUSDT", interval="5m")
+    assert read.candles[0].timestamp == candles[180].timestamp
+    assert read.candles[-1].timestamp == candles[-2].timestamp
+    assert read.candles[0].timestamp > old.candles[-1].timestamp
+    assert len(read.candles) == 49
+
+
+def test_available_rejects_fewer_than_min_count(tmp_path):
+    from flydeck.data.market_data import dataset_from_candles
+    from flydeck.data.market_cache import write_csv
+    candles = rows(210)
+    hist = tmp_path / "prior.csv"
+    old = dataset_from_candles(
+        candles[:180], symbol="BNBUSDT", interval="5m",
+        source="fixture", interval_ms=INTERVAL_MS,
+    )
+    write_csv(old, hist)
+    with pytest.raises(ValueError, match=r"Only 29.*min-count=35"):
+        download_recent_closed(
+            count=100, output=tmp_path / "new.csv", after_history=hist,
+            provider=FakeProvider(candles),
+            now_ms=candles[-2].timestamp + INTERVAL_MS + 1000,
+            available=True,
+        )
+    assert not (tmp_path / "new.csv").exists()
+
+
+def test_available_rejects_missing_first_new_candle(tmp_path):
+    from flydeck.data.market_data import dataset_from_candles
+    from flydeck.data.market_cache import write_csv
+    candles = rows(230)
+    hist = tmp_path / "prior.csv"
+    old = dataset_from_candles(
+        candles[:180], symbol="BNBUSDT", interval="5m",
+        source="fixture", interval_ms=INTERVAL_MS,
+    )
+    write_csv(old, hist)
+    del candles[180]
+    with pytest.raises(ValueError, match="Gap after previous dataset"):
+        download_recent_closed(
+            count=100, output=tmp_path / "new.csv", after_history=hist,
+            provider=FakeProvider(candles),
+            now_ms=candles[-2].timestamp + INTERVAL_MS + 1000,
+            available=True,
+        )
+    assert not (tmp_path / "new.csv").exists()
