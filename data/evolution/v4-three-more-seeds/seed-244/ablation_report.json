@@ -1,0 +1,105 @@
+{
+  "type": "population-level controlled ablation",
+  "paired_seed_and_time_windows": true,
+  "caution": "Descendant IDs are not matched across arms; inspect distributions and new forward holdouts, not only the strongest agent. Both arms use Binance next-close unless official PancakeSwap rounds provided.",
+  "without_fly": {
+    "all_validation": {
+      "agents": 100,
+      "profitable": 41,
+      "risk_survived": 66,
+      "survived_risk_and_profit": 33,
+      "statistical_evidence_scenario_only": 0,
+      "median_equity": 99.22309143015767,
+      "median_accuracy": 0.514794990480554,
+      "median_coverage": 0.16155720231448584
+    },
+    "all_historical_audit": {
+      "agents": 100,
+      "profitable": 29,
+      "risk_survived": 74,
+      "survived_risk_and_profit": 22,
+      "statistical_evidence_scenario_only": 0,
+      "median_equity": 95.15109701959167,
+      "median_accuracy": 0.5115861984655989,
+      "median_coverage": 0.2828450619148294
+    },
+    "positive_in_both": 6,
+    "selected_on_validation": [
+      "G05-0035",
+      "G05-0073",
+      "G04-0071",
+      "G05-0037",
+      "G04-0011"
+    ],
+    "selected_audit": {
+      "agents": 5,
+      "profitable": 0,
+      "risk_survived": 5,
+      "survived_risk_and_profit": 0,
+      "statistical_evidence_scenario_only": 0,
+      "median_equity": 88.30594827443181,
+      "median_accuracy": 0.5074482491777906,
+      "median_coverage": 0.520386590154032
+    }
+  },
+  "with_fly": {
+    "all_validation": {
+      "agents": 100,
+      "profitable": 25,
+      "risk_survived": 45,
+      "survived_risk_and_profit": 20,
+      "statistical_evidence_scenario_only": 0,
+      "median_equity": 98.77102419091766,
+      "median_accuracy": 0.5083023287859998,
+      "median_coverage": 0.05679626433864582
+    },
+    "all_historical_audit": {
+      "agents": 100,
+      "profitable": 38,
+      "risk_survived": 72,
+      "survived_risk_and_profit": 31,
+      "statistical_evidence_scenario_only": 0,
+      "median_equity": 98.50228246965176,
+      "median_accuracy": 0.5136179029310537,
+      "median_coverage": 0.1406926406926407
+    },
+    "positive_in_both": 5,
+    "selected_on_validation": [
+      "G05-0042",
+      "G05-0077",
+      "G05-0023",
+      "G05-0045",
+      "G05-0046"
+    ],
+    "selected_audit": {
+      "agents": 5,
+      "profitable": 0,
+      "risk_survived": 5,
+      "survived_risk_and_profit": 0,
+      "statistical_evidence_scenario_only": 0,
+      "median_equity": 93.85734698957995,
+      "median_accuracy": 0.5096815834767642,
+      "median_coverage": 0.44780026175375015
+    }
+  },
+  "delta_with_minus_without": {
+    "all_validation": {
+      "profitable": -16,
+      "risk_survived": -21,
+      "survived_risk_and_profit": -13,
+      "statistical_evidence_scenario_only": 0,
+      "median_equity": -0.4520672392400087,
+      "median_accuracy": -0.006492661694554203,
+      "median_coverage": -0.10476093797584002
+    },
+    "all_historical_audit": {
+      "profitable": 9,
+      "risk_survived": -2,
+      "survived_risk_and_profit": 9,
+      "statistical_evidence_scenario_only": 0,
+      "median_equity": 3.351185450060086,
+      "median_accuracy": 0.0020317044654547534,
+      "median_coverage": -0.14215242122218869
+    }
+  }
+}

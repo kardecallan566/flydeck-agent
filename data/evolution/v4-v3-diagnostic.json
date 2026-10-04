@@ -1,0 +1,426 @@
+{
+  "research_only": true,
+  "checkpoint_selection_not_modified": true,
+  "history_sha256": "d2524b6cc53faf240cd1b9d174e7d920344ae1465edc4bbf83f15ebfde091b8e",
+  "forward_sha256": "6b6ede4711ca31da7e51d85ac3af995bb6b840c6dfe0f9519139b454978fb5f6",
+  "forward_cumulative_already_inspected": true,
+  "historical_directional_regimes": [
+    {
+      "block": 0,
+      "phase": "train",
+      "first_open_ms": 1769240700000,
+      "last_open_ms": 1772231100000,
+      "evaluable": 9918,
+      "up": 4944,
+      "down": 4974,
+      "up_rate": 0.4984875983061101,
+      "ties_or_unresolved": 51,
+      "already_inspected": false
+    },
+    {
+      "block": 1,
+      "phase": "train",
+      "first_open_ms": 1772231400000,
+      "last_open_ms": 1775231100000,
+      "evaluable": 9918,
+      "up": 4953,
+      "down": 4965,
+      "up_rate": 0.49939503932244406,
+      "ties_or_unresolved": 82,
+      "already_inspected": false
+    },
+    {
+      "block": 2,
+      "phase": "train",
+      "first_open_ms": 1775231400000,
+      "last_open_ms": 1778231100000,
+      "evaluable": 9881,
+      "up": 5015,
+      "down": 4866,
+      "up_rate": 0.5075397227001316,
+      "ties_or_unresolved": 119,
+      "already_inspected": false
+    },
+    {
+      "block": 3,
+      "phase": "development",
+      "first_open_ms": 1778231400000,
+      "last_open_ms": 1781231100000,
+      "evaluable": 9926,
+      "up": 4987,
+      "down": 4939,
+      "up_rate": 0.502417892403788,
+      "ties_or_unresolved": 74,
+      "already_inspected": false
+    },
+    {
+      "block": 4,
+      "phase": "development",
+      "first_open_ms": 1781231400000,
+      "last_open_ms": 1784231100000,
+      "evaluable": 9908,
+      "up": 4957,
+      "down": 4951,
+      "up_rate": 0.5003027856277755,
+      "ties_or_unresolved": 92,
+      "already_inspected": false
+    },
+    {
+      "block": 5,
+      "phase": "validation",
+      "first_open_ms": 1784231400000,
+      "last_open_ms": 1787231100000,
+      "evaluable": 9851,
+      "up": 4919,
+      "down": 4932,
+      "up_rate": 0.4993401685108111,
+      "ties_or_unresolved": 149,
+      "already_inspected": true
+    },
+    {
+      "block": 6,
+      "phase": "historical_audit",
+      "first_open_ms": 1787231400000,
+      "last_open_ms": 1790230800000,
+      "evaluable": 9933,
+      "up": 5006,
+      "down": 4927,
+      "up_rate": 0.5039766435115273,
+      "ties_or_unresolved": 66,
+      "already_inspected": true
+    }
+  ],
+  "development_only_up_prior": 0.5016245888074913,
+  "forward_up_rate": 0.5735849056603773,
+  "forward_up_rate_minus_development_up_prior": 0.07196031685288606,
+  "forward_only_retroactive_reference": {
+    "same_resolved_observations": 265,
+    "always_up": {
+      "entries": 265,
+      "accuracy": 0.5735849056603773,
+      "hypothetical_return_pct": 6.1056829076052255
+    },
+    "always_down": {
+      "entries": 265,
+      "accuracy": 0.42641509433962266,
+      "hypothetical_return_pct": -8.7953086155646
+    },
+    "always_wait_return_pct": 0.0,
+    "up_base_rate": 0.5735849056603773,
+    "fixed_payout_break_even_probability": 0.5154639175257733,
+    "payout_note": "Hypothetical fixed 2x/fee/gas settings; NOT realizable PancakeSwap PnL."
+  },
+  "forecast_brier_constant_prior_frozen_from_development": 0.2497635488605211,
+  "forecast_brier_constant_half": 0.25,
+  "fly_checkpoint_intercepts": {
+    "agents": 100,
+    "negative_intercepts": 97,
+    "median_effective_intercept": -0.0726716567571197,
+    "preselected": [
+      {
+        "agent_id": "G04-0003",
+        "family": "reversion",
+        "effective_intercept": -0.103241078867265,
+        "neutral_features_probability_up": 0.4742126312446219
+      },
+      {
+        "agent_id": "G03-0043",
+        "family": "reversion",
+        "effective_intercept": -0.10752055457650087,
+        "neutral_features_probability_up": 0.4731457274869053
+      },
+      {
+        "agent_id": "G04-0052",
+        "family": "trend",
+        "effective_intercept": -0.031745735561517975,
+        "neutral_features_probability_up": 0.49206423256515675
+      },
+      {
+        "agent_id": "G05-0035",
+        "family": "reversion",
+        "effective_intercept": -0.055468937049978316,
+        "neutral_features_probability_up": 0.4861363202061752
+      },
+      {
+        "agent_id": "G05-0067",
+        "family": "fly",
+        "effective_intercept": -0.03765435131565657,
+        "neutral_features_probability_up": 0.4905875242681684
+      }
+    ]
+  },
+  "ohlcv_checkpoint_intercepts": {
+    "agents": 100,
+    "negative_intercepts": 98,
+    "median_effective_intercept": -0.07009895723100351,
+    "preselected": [
+      {
+        "agent_id": "G03-0043",
+        "family": "reversion",
+        "effective_intercept": -0.10760194584106018,
+        "neutral_features_probability_up": 0.47312543841059196
+      },
+      {
+        "agent_id": "G04-0003",
+        "family": "reversion",
+        "effective_intercept": -0.10321912030652576,
+        "neutral_features_probability_up": 0.47421810628571887
+      },
+      {
+        "agent_id": "G05-0036",
+        "family": "reversion",
+        "effective_intercept": -0.13395164825226458,
+        "neutral_features_probability_up": 0.4665620711771963
+      },
+      {
+        "agent_id": "G05-0055",
+        "family": "fly",
+        "effective_intercept": -0.0695042359454161,
+        "neutral_features_probability_up": 0.4826309327144368
+      },
+      {
+        "agent_id": "G05-0059",
+        "family": "volume",
+        "effective_intercept": -0.040242602620178945,
+        "neutral_features_probability_up": 0.48994070686614244
+      }
+    ]
+  },
+  "forward_with_fly_preselected": {
+    "group": {
+      "agents": 5,
+      "agents_with_entries": 5,
+      "agents_without_entries": 0,
+      "entered_total_correlated_not_independent": 466,
+      "median_accuracy_among_active": 0.4666666666666667,
+      "median_coverage": 0.11320754716981132,
+      "median_window_return_pct": -0.7463230665717746,
+      "positive": 1,
+      "max_entries": 197
+    },
+    "rows": [
+      {
+        "agent_id": "G04-0003",
+        "family": "reversion",
+        "entered": 27,
+        "accuracy": 0.4444444444444444,
+        "coverage": 0.1018867924528302,
+        "return_pct": -0.7463230665717746,
+        "up": 0,
+        "down": 27
+      },
+      {
+        "agent_id": "G03-0043",
+        "family": "reversion",
+        "entered": 30,
+        "accuracy": 0.4666666666666667,
+        "coverage": 0.11320754716981132,
+        "return_pct": -0.5720328822281573,
+        "up": 0,
+        "down": 30
+      },
+      {
+        "agent_id": "G04-0052",
+        "family": "trend",
+        "entered": 189,
+        "accuracy": 0.4497354497354497,
+        "coverage": 0.7132075471698113,
+        "return_pct": -4.739820066452283,
+        "up": 19,
+        "down": 170
+      },
+      {
+        "agent_id": "G05-0035",
+        "family": "reversion",
+        "entered": 23,
+        "accuracy": 0.5217391304347826,
+        "coverage": 0.08679245283018867,
+        "return_pct": 0.051692432321770454,
+        "up": 0,
+        "down": 23
+      },
+      {
+        "agent_id": "G05-0067",
+        "family": "fly",
+        "entered": 197,
+        "accuracy": 0.467005076142132,
+        "coverage": 0.7433962264150943,
+        "return_pct": -3.6721452566811585,
+        "up": 34,
+        "down": 163
+      }
+    ],
+    "calibration": {
+      "finalists": 5,
+      "agent_time_observations_correlated": 1325,
+      "up_base_rate_over_repeated_finalist_observations": 0.5735849056603773,
+      "mean_p_up": 0.4694325983407506,
+      "median_agent_brier": 0.25793119772227885,
+      "unconditional_half_probability_brier": 0.25,
+      "brier_lower_is_better": true,
+      "includes_wait_predictions": true,
+      "selection_or_hypothesis_test_performed": false
+    }
+  },
+  "forward_without_fly_preselected": {
+    "group": {
+      "agents": 5,
+      "agents_with_entries": 5,
+      "agents_without_entries": 0,
+      "entered_total_correlated_not_independent": 297,
+      "median_accuracy_among_active": 0.4397590361445783,
+      "median_coverage": 0.11320754716981132,
+      "median_window_return_pct": -0.9570894882257708,
+      "positive": 0,
+      "max_entries": 166
+    },
+    "rows": [
+      {
+        "agent_id": "G03-0043",
+        "family": "reversion",
+        "entered": 30,
+        "accuracy": 0.4666666666666667,
+        "coverage": 0.11320754716981132,
+        "return_pct": -0.5720328822281573,
+        "up": 0,
+        "down": 30
+      },
+      {
+        "agent_id": "G04-0003",
+        "family": "reversion",
+        "entered": 27,
+        "accuracy": 0.4444444444444444,
+        "coverage": 0.1018867924528302,
+        "return_pct": -0.7463230665717746,
+        "up": 0,
+        "down": 27
+      },
+      {
+        "agent_id": "G05-0036",
+        "family": "reversion",
+        "entered": 44,
+        "accuracy": 0.3181818181818182,
+        "coverage": 0.1660377358490566,
+        "return_pct": -3.3201121296474567,
+        "up": 0,
+        "down": 44
+      },
+      {
+        "agent_id": "G05-0055",
+        "family": "fly",
+        "entered": 166,
+        "accuracy": 0.4397590361445783,
+        "coverage": 0.6264150943396226,
+        "return_pct": -4.789036929100643,
+        "up": 2,
+        "down": 164
+      },
+      {
+        "agent_id": "G05-0059",
+        "family": "volume",
+        "entered": 30,
+        "accuracy": 0.43333333333333335,
+        "coverage": 0.11320754716981132,
+        "return_pct": -0.9570894882257708,
+        "up": 0,
+        "down": 30
+      }
+    ],
+    "calibration": {
+      "finalists": 5,
+      "agent_time_observations_correlated": 1325,
+      "up_base_rate_over_repeated_finalist_observations": 0.5735849056603773,
+      "mean_p_up": 0.4640497071057938,
+      "median_agent_brier": 0.25882681214871484,
+      "unconditional_half_probability_brier": 0.25,
+      "brier_lower_is_better": true,
+      "includes_wait_predictions": true,
+      "selection_or_hypothesis_test_performed": false
+    }
+  },
+  "paired_same_frozen_weights": {
+    "agents": 100,
+    "changed_entry_counts": 47,
+    "median_return_delta_pp": 0.0,
+    "original_finalists": {
+      "paired_decision_opportunities_correlated_across_agents": 1325,
+      "changed_actions": 3,
+      "changed_direction_when_both_entered": 0,
+      "entry_vs_wait_disagreements": 3,
+      "both_entered": 463,
+      "entries_signal_on": 466,
+      "entries_signal_masked": 463,
+      "different_p_up_at_1e_9": 1325,
+      "mean_brier_signal_on": 0.2567259401972865,
+      "mean_brier_signal_masked": 0.25672524837250205,
+      "mean_brier_delta_on_minus_masked": 6.918247844675174e-07
+    }
+  },
+  "selection_warning": "Historical audit and the cumulative 300-candle stream have already been seen. Do not select/promote a strategy using these observations.",
+  "historical_neural_signal": {
+    "cache_fingerprint_verified": true,
+    "non_warmup_samples": 69967,
+    "signal_zero_fraction": 0.0,
+    "signal_mean": -5.6249310907851e-05,
+    "signal_std": 0.06520650245634839,
+    "signal_p05_p50_p95": [
+      -0.10699193477630616,
+      -0.000964159844443202,
+      0.11109979376196862
+    ],
+    "same_observation_signal_vs_next_closed_candle_up_correlation": -0.016784211425243025,
+    "correlation_only_descriptive_and_in_sample": true,
+    "finalist_effective_feature_weights": [
+      {
+        "agent_id": "G04-0003",
+        "family": "reversion",
+        "threshold": 0.13232499615696558,
+        "effective_intercept": -0.103241078867265,
+        "effective_fly_weight": 0.013217912355359183,
+        "max_observed_abs_logit_shift_from_fly": 0.0041934100520053565,
+        "median_abs_non_fly_effective_weight": 0.04136289574688381,
+        "fly_logit_ratio_to_non_fly_weight_median": 0.3195596467966098
+      },
+      {
+        "agent_id": "G03-0043",
+        "family": "reversion",
+        "threshold": 0.1343455277459651,
+        "effective_intercept": -0.10752055457650087,
+        "effective_fly_weight": -0.012052808100478426,
+        "max_observed_abs_logit_shift_from_fly": 0.0038237783157145456,
+        "median_abs_non_fly_effective_weight": 0.04439800834992409,
+        "fly_logit_ratio_to_non_fly_weight_median": 0.27147181930963876
+      },
+      {
+        "agent_id": "G04-0052",
+        "family": "trend",
+        "threshold": 0.024490818435704706,
+        "effective_intercept": -0.031745735561517975,
+        "effective_fly_weight": -0.012602500841978058,
+        "max_observed_abs_logit_shift_from_fly": 0.003998169475660794,
+        "median_abs_non_fly_effective_weight": 0.030893316320826134,
+        "fly_logit_ratio_to_non_fly_weight_median": 0.4079361604012168
+      },
+      {
+        "agent_id": "G05-0035",
+        "family": "reversion",
+        "threshold": 0.13989837058529644,
+        "effective_intercept": -0.055468937049978316,
+        "effective_fly_weight": -0.0053230204329052025,
+        "max_observed_abs_logit_shift_from_fly": 0.0016887392494567659,
+        "median_abs_non_fly_effective_weight": 0.04193463079992771,
+        "fly_logit_ratio_to_non_fly_weight_median": 0.12693614636317196
+      },
+      {
+        "agent_id": "G05-0067",
+        "family": "fly",
+        "threshold": 0.02,
+        "effective_intercept": -0.03765435131565657,
+        "effective_fly_weight": 0.005942973481159526,
+        "max_observed_abs_logit_shift_from_fly": 0.0018854206371395183,
+        "median_abs_non_fly_effective_weight": 0.04279162540617853,
+        "fly_logit_ratio_to_non_fly_weight_median": 0.13888169530249816
+      }
+    ]
+  }
+}

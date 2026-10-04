@@ -1,0 +1,5 @@
+arm,phase,agents,profitable,risk_survived,survived_risk_and_profit,statistical_evidence_scenario_only,median_equity,median_accuracy,median_coverage
+without_fly,all_validation,100,43,76,37,0,99.22954536022701,0.5153238733978851,0.30281189726931274
+without_fly,all_historical_audit,100,21,88,21,0,95.6041704110294,0.5123211258595874,0.36152219873150104
+with_fly,all_validation,100,44,72,34,0,99.65789585178462,0.5150595638691005,0.1574459445741549
+with_fly,all_historical_audit,100,30,79,27,0,96.75137786661384,0.5123717880386827,0.27594885734420616

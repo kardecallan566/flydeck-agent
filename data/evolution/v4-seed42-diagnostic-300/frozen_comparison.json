@@ -1,0 +1,247 @@
+{
+  "research_only": true,
+  "same_new_candles_and_frozen_parameters": true,
+  "new_data_sha256": "6b6ede4711ca31da7e51d85ac3af995bb6b840c6dfe0f9519139b454978fb5f6",
+  "with_fly": {
+    "research_only": true,
+    "arm": "with_fly",
+    "checkpoint_sha256": "7153c80435e72921689fb73f6e946cf9ff22f2744168b58b35967725dae228b0",
+    "source_target": "binance-close-t+1",
+    "cross_target_test": false,
+    "economic_mode": "illustrative_scenario_not_actual_pnl",
+    "new_candles": 300,
+    "cumulative_already_inspected": true,
+    "independent_new_holdout": false,
+    "replayed_from_initial_frozen_checkpoint": true,
+    "skipped_causal_warmup_candles": 32,
+    "actually_evaluable_observations": 265,
+    "risk_threshold_feasible_this_window": true,
+    "risk_min_entries": 80,
+    "risk_min_coverage": 0.05,
+    "risk_max_drawdown": 0.25,
+    "directional_baselines": {
+      "same_resolved_observations": 265,
+      "always_up": {
+        "entries": 265,
+        "accuracy": 0.5735849056603773,
+        "hypothetical_return_pct": 6.1056829076052255
+      },
+      "always_down": {
+        "entries": 265,
+        "accuracy": 0.42641509433962266,
+        "hypothetical_return_pct": -8.7953086155646
+      },
+      "always_wait_return_pct": 0.0,
+      "up_base_rate": 0.5735849056603773,
+      "fixed_payout_break_even_probability": 0.5154639175257733,
+      "payout_note": "Hypothetical fixed 2x/fee/gas settings; NOT realizable PancakeSwap PnL."
+    },
+    "first_new_open_ms": 1790969400000,
+    "first_evaluated_open_ms": 1790979000000,
+    "last_downloaded_open_ms": 1791059100000,
+    "previously_inspected_last_open_ms": 1790969100000,
+    "source_csv_sha256": "6b6ede4711ca31da7e51d85ac3af995bb6b840c6dfe0f9519139b454978fb5f6",
+    "evaluation_without_weight_updates": true,
+    "selected_before_forward": [
+      "G05-0071",
+      "G05-0067",
+      "G02-0060",
+      "G02-0022",
+      "G05-0077"
+    ],
+    "full_cohort": {
+      "agents": 100,
+      "positive_this_window": 4,
+      "above_initial_capital": 4,
+      "median_window_return_pct": -2.1375320237938142,
+      "median_accuracy": 0.43516908212560385,
+      "median_accuracy_active_only": 0.43516908212560385,
+      "agents_without_entries": 0,
+      "median_coverage": 0.2962264150943396,
+      "median_peak_to_trough_drawdown": 0.037779265841991705,
+      "wilson_lower_above_scenario_break_even_count": 0
+    },
+    "preselected_finalists": {
+      "agents": 5,
+      "positive_this_window": 1,
+      "above_initial_capital": 1,
+      "median_window_return_pct": -3.5570383139503114,
+      "median_accuracy": 0.43478260869565216,
+      "median_accuracy_active_only": 0.43478260869565216,
+      "agents_without_entries": 0,
+      "median_coverage": 0.4339622641509434,
+      "median_peak_to_trough_drawdown": 0.04901231098749674,
+      "wilson_lower_above_scenario_break_even_count": 0
+    },
+    "model_search_correction": "not_established",
+    "live_trading_approved": false
+  },
+  "without_fly": {
+    "research_only": true,
+    "arm": "without_fly",
+    "checkpoint_sha256": "6f75506a4746e3adc8809b2e0f89253e832c2bdeeff5ad5d53a68b2997eaa828",
+    "source_target": "binance-close-t+1",
+    "cross_target_test": false,
+    "economic_mode": "illustrative_scenario_not_actual_pnl",
+    "new_candles": 300,
+    "cumulative_already_inspected": true,
+    "independent_new_holdout": false,
+    "replayed_from_initial_frozen_checkpoint": true,
+    "skipped_causal_warmup_candles": 32,
+    "actually_evaluable_observations": 265,
+    "risk_threshold_feasible_this_window": true,
+    "risk_min_entries": 80,
+    "risk_min_coverage": 0.05,
+    "risk_max_drawdown": 0.25,
+    "directional_baselines": {
+      "same_resolved_observations": 265,
+      "always_up": {
+        "entries": 265,
+        "accuracy": 0.5735849056603773,
+        "hypothetical_return_pct": 6.1056829076052255
+      },
+      "always_down": {
+        "entries": 265,
+        "accuracy": 0.42641509433962266,
+        "hypothetical_return_pct": -8.7953086155646
+      },
+      "always_wait_return_pct": 0.0,
+      "up_base_rate": 0.5735849056603773,
+      "fixed_payout_break_even_probability": 0.5154639175257733,
+      "payout_note": "Hypothetical fixed 2x/fee/gas settings; NOT realizable PancakeSwap PnL."
+    },
+    "first_new_open_ms": 1790969400000,
+    "first_evaluated_open_ms": 1790979000000,
+    "last_downloaded_open_ms": 1791059100000,
+    "previously_inspected_last_open_ms": 1790969100000,
+    "source_csv_sha256": "6b6ede4711ca31da7e51d85ac3af995bb6b840c6dfe0f9519139b454978fb5f6",
+    "evaluation_without_weight_updates": true,
+    "selected_before_forward": [
+      "G02-0022",
+      "G05-0077",
+      "G05-0067",
+      "G05-0003",
+      "G04-0052"
+    ],
+    "full_cohort": {
+      "agents": 100,
+      "positive_this_window": 3,
+      "above_initial_capital": 3,
+      "median_window_return_pct": -2.4913527399786526,
+      "median_accuracy": 0.4415329034618375,
+      "median_accuracy_active_only": 0.4415329034618375,
+      "agents_without_entries": 0,
+      "median_coverage": 0.3471698113207547,
+      "median_peak_to_trough_drawdown": 0.04023830965479339,
+      "wilson_lower_above_scenario_break_even_count": 0
+    },
+    "preselected_finalists": {
+      "agents": 5,
+      "positive_this_window": 0,
+      "above_initial_capital": 0,
+      "median_window_return_pct": -3.349705430990313,
+      "median_accuracy": 0.4583333333333333,
+      "median_accuracy_active_only": 0.4583333333333333,
+      "agents_without_entries": 0,
+      "median_coverage": 0.41509433962264153,
+      "median_peak_to_trough_drawdown": 0.04901231098749654,
+      "wilson_lower_above_scenario_break_even_count": 0
+    },
+    "model_search_correction": "not_established",
+    "live_trading_approved": false
+  },
+  "with_minus_without": {
+    "positive_this_window": 1.0,
+    "median_window_return_pct": 0.35382071618483835,
+    "median_accuracy": -0.006363821336233644,
+    "median_accuracy_active_only": -0.006363821336233644,
+    "agents_without_entries": 0.0,
+    "median_coverage": -0.05094339622641508
+  },
+  "note": "Differences across evolved populations do not prove causal contribution. The optional masked-signal arm uses the exact same Fly-trained agents, with the Fly input replaced by zero; an out-of-distribution diagnostic.",
+  "legacy_median_accuracy_includes_wait_agents_as_zero": true,
+  "prefer_median_accuracy_active_only_and_per_action_brier": true,
+  "does_not_establish_economic_edge": true,
+  "fly_trained_signal_masked": {
+    "research_only": true,
+    "arm": "with_fly_signal_masked",
+    "checkpoint_sha256": "7153c80435e72921689fb73f6e946cf9ff22f2744168b58b35967725dae228b0",
+    "source_target": "binance-close-t+1",
+    "cross_target_test": false,
+    "economic_mode": "illustrative_scenario_not_actual_pnl",
+    "new_candles": 300,
+    "cumulative_already_inspected": true,
+    "independent_new_holdout": false,
+    "replayed_from_initial_frozen_checkpoint": true,
+    "skipped_causal_warmup_candles": 32,
+    "actually_evaluable_observations": 265,
+    "risk_threshold_feasible_this_window": true,
+    "risk_min_entries": 80,
+    "risk_min_coverage": 0.05,
+    "risk_max_drawdown": 0.25,
+    "directional_baselines": {
+      "same_resolved_observations": 265,
+      "always_up": {
+        "entries": 265,
+        "accuracy": 0.5735849056603773,
+        "hypothetical_return_pct": 6.1056829076052255
+      },
+      "always_down": {
+        "entries": 265,
+        "accuracy": 0.42641509433962266,
+        "hypothetical_return_pct": -8.7953086155646
+      },
+      "always_wait_return_pct": 0.0,
+      "up_base_rate": 0.5735849056603773,
+      "fixed_payout_break_even_probability": 0.5154639175257733,
+      "payout_note": "Hypothetical fixed 2x/fee/gas settings; NOT realizable PancakeSwap PnL."
+    },
+    "first_new_open_ms": 1790969400000,
+    "first_evaluated_open_ms": 1790979000000,
+    "last_downloaded_open_ms": 1791059100000,
+    "previously_inspected_last_open_ms": 1790969100000,
+    "source_csv_sha256": "6b6ede4711ca31da7e51d85ac3af995bb6b840c6dfe0f9519139b454978fb5f6",
+    "evaluation_without_weight_updates": true,
+    "selected_before_forward": [
+      "G05-0071",
+      "G05-0067",
+      "G02-0060",
+      "G02-0022",
+      "G05-0077"
+    ],
+    "full_cohort": {
+      "agents": 100,
+      "positive_this_window": 5,
+      "above_initial_capital": 5,
+      "median_window_return_pct": -2.131413167607976,
+      "median_accuracy": 0.43498389694041867,
+      "median_accuracy_active_only": 0.43498389694041867,
+      "agents_without_entries": 0,
+      "median_coverage": 0.2962264150943396,
+      "median_peak_to_trough_drawdown": 0.0377197162531045,
+      "wilson_lower_above_scenario_break_even_count": 0
+    },
+    "preselected_finalists": {
+      "agents": 5,
+      "positive_this_window": 1,
+      "above_initial_capital": 1,
+      "median_window_return_pct": -3.5570383139503114,
+      "median_accuracy": 0.43478260869565216,
+      "median_accuracy_active_only": 0.43478260869565216,
+      "agents_without_entries": 0,
+      "median_coverage": 0.4339622641509434,
+      "median_peak_to_trough_drawdown": 0.04901231098749674,
+      "wilson_lower_above_scenario_break_even_count": 0
+    },
+    "model_search_correction": "not_established",
+    "live_trading_approved": false
+  },
+  "signal_present_minus_masked_on_same_agents": {
+    "positive_this_window": -1.0,
+    "median_window_return_pct": -0.006118856185838073,
+    "median_accuracy": 0.00018518518518517713,
+    "median_accuracy_active_only": 0.00018518518518517713,
+    "agents_without_entries": 0.0,
+    "median_coverage": 0.0
+  }
+}

@@ -1,0 +1,20 @@
+EXPERIMENTAL v4 training: online settled-label weighting and bias decay; v3 frozen checkpoint is NOT modified. Historical audit/old recent period is ALREADY inspected.
+CONTROLLED EXPERIMENT: shared MaleCNS versus OHLCV-only; same seed, block splits, risk settings and historical data.
+Block 1/7 [train] eligible=9918 A0067 55.4% eq=120.13 | A0023 55.6% eq=117.24 | A0049 55.0% eq=115.35
+Block 2/7 [train] eligible=9918 G01-0063 54.8% eq=145.63 | G01-0080 53.4% eq=150.58 | G01-0021 53.2% eq=141.52
+Block 3/7 [train] eligible=9881 G02-0054 54.9% eq=120.28 | G02-0060 53.5% eq=120.32 | G02-0014 53.8% eq=120.41
+Block 4/7 [development] eligible=9926 G03-0075 54.3% eq=112.66 | G03-0039 53.1% eq=111.25 | G03-0043 52.9% eq=109.61
+Block 5/7 [development] eligible=9908 G04-0037 52.8% eq=132.02 | G04-0054 53.3% eq=126.49 | G04-0034 52.7% eq=132.29
+Block 6/7 [validation] eligible=9851 G05-0003 54.0% eq=107.32 | G02-0008 53.5% eq=105.44 | G04-0023 52.1% eq=110.88
+Block 7/7 [historical_audit] eligible=9933 G05-0073 54.1% eq=106.88 | G05-0068 53.0% eq=108.59 | G05-0028 53.0% eq=104.74
+Block 1/7 [train] eligible=9918 A0067 55.1% eq=118.29 | A0023 55.5% eq=116.63 | A0049 54.9% eq=114.69
+Block 2/7 [train] eligible=9918 G01-0054 53.6% eq=163.43 | G01-0014 53.4% eq=155.64 | G01-0063 54.7% eq=144.88
+Block 3/7 [train] eligible=9881 G02-0038 53.6% eq=121.87 | G02-0074 55.0% eq=120.06 | G01-0063 54.2% eq=118.24
+Block 4/7 [development] eligible=9926 G03-0035 53.9% eq=107.59 | G03-0043 52.8% eq=108.79 | G02-0074 52.9% eq=109.59
+Block 5/7 [development] eligible=9908 G04-0044 52.9% eq=138.01 | G04-0064 52.7% eq=132.57 | G04-0075 52.4% eq=124.25
+Block 6/7 [validation] eligible=9851 G05-0054 52.2% eq=113.42 | G03-0024 52.1% eq=110.13 | G05-0068 52.1% eq=101.11
+Block 7/7 [historical_audit] eligible=9933 G05-0068 53.1% eq=109.01 | G05-0028 52.9% eq=104.21 | G05-0043 51.8% eq=100.41
+ABLATED COMPARISON SAVED: data\evolution\v4-three-more-seeds\seed-345\ablation_report.json
+Holdout results are DESCRIPTIVE; no agent is live-approved.
+Audit median-equity difference (with - without): 1.1472074555844358
+Research only: no real-money execution.

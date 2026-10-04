@@ -1,0 +1,25 @@
+{
+  "research_only": true,
+  "frozen_v3_unchanged": true,
+  "experimental_v4": true,
+  "branch": "feat/evolution-v2-survival-control-recent",
+  "seed": 42,
+  "population": 100,
+  "history": "data/cache/BNBUSDT_5m.csv",
+  "circuit": "data/malecns/motion_visual.json",
+  "male_cns_shared_cache": "data/cache/fly_shared_features.npz",
+  "class_balance_alpha": 0.75,
+  "class_weight_cap": 1.5,
+  "bias_l2_multiplier": 4.0,
+  "matching_ablation": [
+    "with_fly",
+    "without_fly"
+  ],
+  "output": "data\\evolution\\v4-single-seed\\seed-42",
+  "hypothesis": "online resolved-only class weighting and stronger intercept shrinkage",
+  "never_select_on": [
+    "historical_audit_already_examined",
+    "repaired_300_candles_already_examined"
+  ],
+  "no_actual_pancakeswap_pnl": true
+}

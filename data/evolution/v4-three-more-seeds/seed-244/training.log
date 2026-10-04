@@ -1,0 +1,20 @@
+EXPERIMENTAL v4 training: online settled-label weighting and bias decay; v3 frozen checkpoint is NOT modified. Historical audit/old recent period is ALREADY inspected.
+CONTROLLED EXPERIMENT: shared MaleCNS versus OHLCV-only; same seed, block splits, risk settings and historical data.
+Block 1/7 [train] eligible=9918 A0007 55.6% eq=122.59 | A0053 55.1% eq=122.12 | A0071 57.0% eq=111.57
+Block 2/7 [train] eligible=9918 A0036 54.1% eq=146.98 | G01-0025 54.1% eq=145.80 | G01-0026 54.1% eq=144.99
+Block 3/7 [train] eligible=9881 G01-0043 53.7% eq=113.16 | G01-0047 53.4% eq=116.02 | G02-0038 53.7% eq=107.81
+Block 4/7 [development] eligible=9926 G03-0014 53.9% eq=110.01 | G02-0015 53.3% eq=110.84 | G03-0030 53.8% eq=108.89
+Block 5/7 [development] eligible=9908 G04-0008 56.0% eq=112.39 | G04-0023 52.5% eq=125.90 | G04-0075 53.7% eq=117.36
+Block 6/7 [validation] eligible=9851 G05-0025 51.6% eq=99.93 | G05-0042 52.4% eq=108.02 | G05-0077 52.1% eq=108.90
+Block 7/7 [historical_audit] eligible=9933 G05-0024 54.2% eq=109.79 | G05-0051 54.0% eq=109.56 | G05-0029 52.8% eq=106.61
+Block 1/7 [train] eligible=9918 A0007 56.0% eq=124.82 | A0053 55.1% eq=122.07 | A0071 57.0% eq=111.57
+Block 2/7 [train] eligible=9918 A0036 54.1% eq=146.96 | G01-0026 54.2% eq=146.43 | G01-0025 54.1% eq=145.78
+Block 3/7 [train] eligible=9881 G01-0033 54.0% eq=122.97 | G02-0018 54.0% eq=121.07 | G01-0043 53.5% eq=112.07
+Block 4/7 [development] eligible=9926 G03-0031 54.2% eq=113.60 | G02-0018 53.3% eq=115.69 | G03-0023 54.7% eq=110.22
+Block 5/7 [development] eligible=9908 G04-0034 53.3% eq=135.37 | G04-0033 52.8% eq=138.43 | G04-0014 52.9% eq=139.55
+Block 6/7 [validation] eligible=9851 G05-0035 53.9% eq=105.93 | G05-0073 52.4% eq=117.40 | G04-0071 52.2% eq=113.97
+Block 7/7 [historical_audit] eligible=9933 G05-0016 54.0% eq=109.04 | G05-0029 52.8% eq=106.55 | G05-0024 53.8% eq=110.36
+ABLATED COMPARISON SAVED: data\evolution\v4-three-more-seeds\seed-244\ablation_report.json
+Holdout results are DESCRIPTIVE; no agent is live-approved.
+Audit median-equity difference (with - without): 3.351185450060086
+Research only: no real-money execution.

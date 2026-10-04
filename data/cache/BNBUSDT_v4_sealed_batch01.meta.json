@@ -1,0 +1,17 @@
+{
+  "symbol": "BNBUSDT",
+  "interval": "5m",
+  "count": 79,
+  "requested_count": 2000,
+  "available_after_history_in_requested_window": 79,
+  "partial_download_explicit": true,
+  "first_open_ms": 1791059400000,
+  "last_open_ms": 1791082800000,
+  "first_open_utc": "2026-10-03T20:30:00+00:00",
+  "last_closed_utc": "2026-10-04T03:05:00+00:00",
+  "downloaded_utc": "2026-10-04T03:06:15.634000+00:00",
+  "history_last_open_ms": 1791059100000,
+  "no_partial_candles": true,
+  "no_gaps": true,
+  "strictly_newer_than_history": true
+}
