@@ -1,0 +1,26 @@
+{
+  "status": "success",
+  "synthetic_fixture_only": true,
+  "data": [
+    {
+      "pool": "SYNTHETIC_USDT_USDC_NOT_A_REAL_POOL",
+      "chain": "BSC",
+      "project": "pancakeswap-amm",
+      "symbol": "USDT-USDC",
+      "tvlUsd": 250000,
+      "apy": 10,
+      "apyBase": 10,
+      "apyReward": 0
+    },
+    {
+      "pool": "SYNTHETIC_CAKE_WBNB_NOT_A_REAL_POOL",
+      "chain": "BSC",
+      "project": "pancakeswap-amm-v3",
+      "symbol": "CAKE-WBNB",
+      "tvlUsd": 800000,
+      "apy": 25,
+      "apyBase": 15,
+      "apyReward": 10
+    }
+  ]
+}

@@ -186,6 +186,16 @@ The FlyDeck Agent is not currently intended to:
 - Prefer structural explanations over blind parameter searches.
 - Keep memory, compute and dependencies small.
 
+## Pool Watch — public pool screening for US$ 5–20
+
+`flydeck-pool-watch` produces a static HTML report, CSV and JSON from
+third-party DefiLlama yields, filtering BSC PancakeSwap V2/V3 pools by
+TVL and comparing *illustrative* gross yield against user-supplied
+round-trip costs. V3 aggregate APY is **NOT** a user-specific position
+quote. Offline demo and Windows commands:
+[LOW_CAPITAL_POOL_WATCH.md](docs/LOW_CAPITAL_POOL_WATCH.md).
+No wallet, trades, guarantee or authenticated live contract quotes.
+
 ## PancakeSwap economics and dedicated sealed holdout collection
 
 [Income and research workflow](docs/EARN_AND_SEALED.md):
