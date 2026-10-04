@@ -186,6 +186,15 @@ The FlyDeck Agent is not currently intended to:
 - Prefer structural explanations over blind parameter searches.
 - Keep memory, compute and dependencies small.
 
+## Pool Watch v3 — temporal context and V2 downside scenarios
+
+[Pool Watch v3 usage](docs/POOL_WATCH_V3.md): show small observed APY/TVL
+changes even when no alert threshold fires, flag comparisons less than
+one hour apart, clarify legacy/partial source coverage, and include
+hypothetical V2-only LP versus holding asset-price shock tables and
+`stress_v2.csv`. These are deterministic illustrations and third-party
+source snapshots, not user-specific V3 income or investment signals.
+
 ## Pool Watch v2 — visual budget report and historical pool alerts
 
 [Pool Watch v2 manual](docs/POOL_WATCH_V2.md) documents the redesigned responsive HTML with cost-first conclusions, V2/V3 separation and explanatory cards. Use the new `--previous` option to compare two public snapshots and generate `changes.html`, `changes.csv` and `changes.json` for APY/TVL movements. Old top-N reports are explicitly marked as incomplete comparisons. No wallet, live earnings, guaranteed APR or background monitoring.
