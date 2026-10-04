@@ -46,13 +46,15 @@ def fetch_public_pools(timeout=25):
 
 
 def analyze(payload, *, budget=20, allocation=10, cost=1, days=30,
-            min_tvl=100000, limit=12):
+            min_tvl=100000, limit=12, stress_pct=30.0):
     if not all(math.isfinite(v) for v in (budget, allocation, cost, min_tvl)):
         raise ValueError("budget/cost/TVL must be finite")
     if not 0 < allocation <= budget or cost < 0 or min_tvl < 10000:
         raise ValueError("invalid allocation/cost/minimum TVL")
     if not 1 <= days <= 3650 or not 1 <= limit <= 100:
         raise ValueError("days/limit out of range")
+    if not math.isfinite(stress_pct) or not 1 <= stress_pct <= 90:
+        raise ValueError("stress shock must be between 1 and 90 percent")
     if not isinstance(payload, dict) or payload.get("status") not in (None, "success"):
         raise ValueError("untrusted source response")
     rows = payload.get("data")
@@ -79,7 +81,18 @@ def analyze(payload, *, budget=20, allocation=10, cost=1, days=30,
             warnings.append("Stablecoins também podem perder paridade")
         if apy >= 50:
             warnings.append("APY elevado: investigar risco do token, recompensas e sustentabilidade")
+        # Model V2 scenarios only. Concentrated V3 positions require their
+        # own range-specific economics and must never inherit these curves.
+        if not v3:
+            from .pool_stress import v2_stress_scenarios
+            stress = v2_stress_scenarios(
+                capital_usd=allocation, hypothetical_gross_yield_usd=gross,
+                roundtrip_cost_usd=cost, shock_pct=stress_pct,
+            )
+        else:
+            stress = None
         output.append({
+            "stress_test": stress,
             "symbol": symbol, "version": "V3" if v3 else "V2",
             "pool_id": key, "tvl_usd": round(tvl, 2),
             "reported_apy_pct": round(apy, 5),
@@ -111,6 +124,7 @@ def analyze(payload, *, budget=20, allocation=10, cost=1, days=30,
         "source": SOURCE, "budget_usd": budget, "allocation_usd": allocation,
         "reserved_usd": round(budget - allocation, 4),
         "assumed_roundtrip_cost_usd": cost, "days": days,
+        "stress_shock_pct": stress_pct,
         "apy_needed_to_cover_costs_pct": round(100 * 365 * cost / (days * allocation), 4),
         "matching_pools": len(output), "pools": output[:limit],
         "min_tvl_usd": min_tvl,
@@ -153,6 +167,27 @@ def export(report, output_dir):
         fields = ("symbol", "version", "tvl_usd", "reported_apy_pct",
                   "gross_yield_usd", "gross_minus_cost_usd", "break_even_days",
                   "status", "pool_url")
+        with (root / "stress_v2.csv").open(
+            "w", newline="", encoding="utf-8-sig"
+        ) as f:
+            from .pool_stress import v2_stress_scenarios
+            stress_fields = (
+                "pool", "token_a_price_change_pct", "token_b_price_change_pct",
+                "hold_50_50_usd", "lp_without_rewards_usd",
+                "impermanent_loss_vs_hold_pct", "net_lp_usd",
+                "lp_minus_hold_usd", "net_lp_vs_initial_usd",
+            )
+            writer = csv.DictWriter(f, fieldnames=stress_fields)
+            writer.writeheader()
+            for pool in report["pools"]:
+                scenarios = pool.get("stress_test")
+                if scenarios is None:
+                    continue
+                for scenario in scenarios["rows"]:
+                    writer.writerow({
+                        **{"pool": pool["symbol"]},
+                        **{k: scenario[k] for k in stress_fields if k != "pool"},
+                    })
         with (root / "pools.csv").open("w", newline="", encoding="utf-8-sig") as f:
             writer = csv.DictWriter(f, fieldnames=fields)
             writer.writeheader()
@@ -174,6 +209,11 @@ def main():
     p.add_argument("--days", type=int, default=30)
     p.add_argument("--min-tvl-usd", type=float, default=100000)
     p.add_argument("--limit", type=int, default=12)
+    p.add_argument(
+        "--stress-pct", type=float, default=30.0,
+        help="Hypothetical V2 one-asset price rise/fall percentage (1..90). "
+             "It is NOT a forecast and does not apply to V3.",
+    )
     p.add_argument("--snapshot", type=Path, help="Offline DefiLlama response JSON; no network")
     p.add_argument(
         "--previous", type=Path,
@@ -194,7 +234,7 @@ def main():
         result = analyze(
             source, budget=a.budget_usd, allocation=a.allocation_usd,
             cost=a.roundtrip_cost_usd, days=a.days, min_tvl=a.min_tvl_usd,
-            limit=a.limit,
+            limit=a.limit, stress_pct=a.stress_pct,
         )
         result["input_mode"] = "offline_snapshot" if a.snapshot else "online_public_feed"
         if a.snapshot:
@@ -215,6 +255,7 @@ def main():
           str(result["apy_needed_to_cover_costs_pct"]) + "%")
     print("Static report:", location / "report.html")
     print("CSV:", location / "pools.csv")
+    print("V2 hypothetical price stress CSV:", location / "stress_v2.csv")
     if "comparison" in result:
         print("Source-change alerts:", location / "changes.html",
               "| attention:", result["comparison"]["attention_count"])
