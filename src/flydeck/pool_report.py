@@ -93,7 +93,7 @@ def render(report: dict) -> str:
     cost = float(report["assumed_roundtrip_cost_usd"])
     demo = report.get("synthetic_fixture_only") is True
     caution = (
-        '<div class="demo" role="alert">DADOS DE DEMONSTRAÇÃO — '
+        '<div class="demo" role="alert">DEMONSTRAÇÃO: DADOS INVENTADOS — '
         'TODAS AS POOLS E TAXAS DESTE EXEMPLO SÃO INVENTADAS.</div>'
         if demo else ""
     )
