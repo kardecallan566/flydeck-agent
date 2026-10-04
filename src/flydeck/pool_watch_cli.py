@@ -113,6 +113,14 @@ def analyze(payload, *, budget=20, allocation=10, cost=1, days=30,
         "assumed_roundtrip_cost_usd": cost, "days": days,
         "apy_needed_to_cover_costs_pct": round(100 * 365 * cost / (days * allocation), 4),
         "matching_pools": len(output), "pools": output[:limit],
+        "min_tvl_usd": min_tvl,
+        # Full SOURCE-FILTERED index permits meaningful monitoring even when
+        # only the 12 highest-liquidity examples were displayed in HTML.
+        "monitoring_index": [{
+            "pool_id": p["pool_id"], "symbol": p["symbol"],
+            "reported_apy_pct": p["reported_apy_pct"],
+            "tvl_usd": p["tvl_usd"],
+        } for p in output],
         "caveats": [
             "No position is always an option, particularly below $20.",
             "No live contract, actual withdrawability or actual user V3 APR verified.",
@@ -124,58 +132,9 @@ def analyze(payload, *, budget=20, allocation=10, cost=1, days=30,
 
 
 def html_report(report):
-    esc = lambda s: html.escape(str(s), quote=True)
-    demo = bool(report.get("synthetic_fixture_only"))
-    demo_notice = (
-        '<p class="summary"><strong>DEMONSTRAÇÃO: DADOS INVENTADOS, NÃO SÃO POOLS OU APYs REAIS.</strong></p>'
-        if demo else ""
-    )
-    cards = []
-    for p in report["pools"]:
-        cards.append(
-            '<article><header><h2>' + esc(p["symbol"]) + '</h2><span>' +
-            esc(p["version"]) + '</span></header><p>TVL: US$ ' +
-            esc(format(p["tvl_usd"], ",.0f")) +
-            ' | APY agregado: ' + esc(format(p["reported_apy_pct"], ".2f")) +
-            '%</p><div class="gross">Rendimento bruto hipotético: US$ ' +
-            esc(format(p["gross_yield_usd"], ".4f")) +
-            '</div><p>Bruto menos custos assumidos: US$ ' +
-            esc(format(p["gross_minus_cost_usd"], ".4f")) +
-            '</p><p class="muted">' + esc(" · ".join(p["warnings"])) +
-            '</p><a href="' + esc(p["pool_url"]) +
-            '" target="_blank" rel="noopener noreferrer">Dados de terceiros ↗</a></article>'
-        )
-    if not cards:
-        cards = ["<article><h2>Nenhuma pool passou nos filtros</h2>"
-                 "<p>Não investir é uma alternativa válida.</p></article>"]
-    return (
-        '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width, initial-scale=1">'
-        '<meta name="referrer" content="no-referrer"><title>FlyDeck | Pools</title>'
-        '<style>body{font-family:system-ui;background:#0e1824;color:#ecf5fa;'
-        'max-width:1080px;margin:auto;padding:24px}h1{font-size:2rem}'
-        'article,.summary{padding:20px;background:#162839;border:1px solid #3c5565;'
-        'border-radius:16px;margin:16px 0}header{display:flex;justify-content:space-between}'
-        '.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}'
-        '.grid article{margin:0}a{color:#8ce0db}.muted{color:#d2bfa9;font-size:.9rem}'
-        '.gross{font-size:1.2rem;font-weight:700}small{color:#afc4d5}</style></head>'
-        '<body><p>FLYDECK · PESQUISA SOMENTE LEITURA</p>'
-        '<h1>Vale a pena investir menos de US$ 20?</h1>' + demo_notice +
-        '<div class="summary"><p>Orçamento: US$ ' +
-        esc(report["budget_usd"]) + ' · Simulação de aporte: US$ ' +
-        esc(report["allocation_usd"]) + ' · Reserva: US$ ' +
-        esc(report["reserved_usd"]) + '</p><p>APR necessário APENAS para '
-        'cobrir os custos assumidos em ' + esc(report["days"]) + ' dias: ' +
-        esc(report["apy_needed_to_cover_costs_pct"]) + '%</p>'
-        '<small>APY agregado NÃO é cotação para sua posição. O modelo '
-        'não inclui perda de tokens, impermanent loss ou riscos do contrato.</small>'
-        '</div><div class="grid">' + "".join(cards) + '</div>'
-        '<p>Verifique as posições em '
-        '<a href="https://pancakeswap.finance/liquidity/pools">PancakeSwap</a>'
-        '. Dados: <a href="https://defillama.com/yields">DefiLlama</a>. '
-        'Consulta UTC: ' + esc(report["collected_utc"]) + '</p>'
-        '</body></html>'
-    )
+    """Improved dashboard kept as a stable interface for callers/tests."""
+    from .pool_report import render
+    return render(report)
 
 
 def export(report, output_dir):
@@ -188,6 +147,9 @@ def export(report, output_dir):
             json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
         (root / "report.html").write_text(html_report(report), encoding="utf-8")
+        if "comparison" in report:
+            from .pool_monitor import save_comparison
+            save_comparison(report["comparison"], root)
         fields = ("symbol", "version", "tvl_usd", "reported_apy_pct",
                   "gross_yield_usd", "gross_minus_cost_usd", "break_even_days",
                   "status", "pool_url")
@@ -213,6 +175,18 @@ def main():
     p.add_argument("--min-tvl-usd", type=float, default=100000)
     p.add_argument("--limit", type=int, default=12)
     p.add_argument("--snapshot", type=Path, help="Offline DefiLlama response JSON; no network")
+    p.add_argument(
+        "--previous", type=Path,
+        help="Earlier report.json for offline APY / liquidity change alerts",
+    )
+    p.add_argument(
+        "--apy-change-pp", type=float, default=2.0,
+        help="Notify of changes >= this many absolute APY percentage points",
+    )
+    p.add_argument(
+        "--tvl-drop-pct", type=float, default=20.0,
+        help="Notify when aggregated pool TVL falls by this percentage",
+    )
     p.add_argument("--out-dir", type=Path, required=True)
     a = p.parse_args()
     try:
@@ -225,6 +199,14 @@ def main():
         result["input_mode"] = "offline_snapshot" if a.snapshot else "online_public_feed"
         if a.snapshot:
             result["offline_snapshot_file"] = str(a.snapshot)
+        if a.previous is not None:
+            from .pool_monitor import compare_reports
+            previous = json.loads(a.previous.read_text(encoding="utf-8"))
+            result["comparison"] = compare_reports(
+                previous, result,
+                apy_change_pp=a.apy_change_pp,
+                tvl_drop_pct=a.tvl_drop_pct,
+            )
         location = export(result, a.out_dir)
     except (ValueError, OSError, json.JSONDecodeError) as exc:
         p.exit(2, f"Pool screen aborted: {exc}\n")
@@ -233,6 +215,9 @@ def main():
           str(result["apy_needed_to_cover_costs_pct"]) + "%")
     print("Static report:", location / "report.html")
     print("CSV:", location / "pools.csv")
+    if "comparison" in result:
+        print("Source-change alerts:", location / "changes.html",
+              "| attention:", result["comparison"]["attention_count"])
     print("This is NOT a live PancakeSwap quote or a trade recommendation.")
     return 0
 
