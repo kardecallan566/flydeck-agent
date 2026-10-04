@@ -106,6 +106,7 @@ def analyze(payload, *, budget=20, allocation=10, cost=1, days=30,
     ))
     return {
         "research_only": True, "third_party_not_official_quote": True,
+        "synthetic_fixture_only": payload.get("synthetic_fixture_only") is True,
         "collected_utc": datetime.now(timezone.utc).isoformat(),
         "source": SOURCE, "budget_usd": budget, "allocation_usd": allocation,
         "reserved_usd": round(budget - allocation, 4),
@@ -124,7 +125,11 @@ def analyze(payload, *, budget=20, allocation=10, cost=1, days=30,
 
 def html_report(report):
     esc = lambda s: html.escape(str(s), quote=True)
-    budget = report["budget_usd"]
+    demo = bool(report.get("synthetic_fixture_only"))
+    demo_notice = (
+        '<p class="summary"><strong>DEMONSTRAÇÃO: DADOS INVENTADOS, NÃO SÃO POOLS OU APYs REAIS.</strong></p>'
+        if demo else ""
+    )
     cards = []
     for p in report["pools"]:
         cards.append(
@@ -155,7 +160,7 @@ def html_report(report):
         '.grid article{margin:0}a{color:#8ce0db}.muted{color:#d2bfa9;font-size:.9rem}'
         '.gross{font-size:1.2rem;font-weight:700}small{color:#afc4d5}</style></head>'
         '<body><p>FLYDECK · PESQUISA SOMENTE LEITURA</p>'
-        '<h1>Vale a pena investir menos de US$ 20?</h1>'
+        '<h1>Vale a pena investir menos de US$ 20?</h1>' + demo_notice +
         '<div class="summary"><p>Orçamento: US$ ' +
         esc(report["budget_usd"]) + ' · Simulação de aporte: US$ ' +
         esc(report["allocation_usd"]) + ' · Reserva: US$ ' +
@@ -217,6 +222,9 @@ def main():
             cost=a.roundtrip_cost_usd, days=a.days, min_tvl=a.min_tvl_usd,
             limit=a.limit,
         )
+        result["input_mode"] = "offline_snapshot" if a.snapshot else "online_public_feed"
+        if a.snapshot:
+            result["offline_snapshot_file"] = str(a.snapshot)
         location = export(result, a.out_dir)
     except (ValueError, OSError, json.JSONDecodeError) as exc:
         p.exit(2, f"Pool screen aborted: {exc}\n")
