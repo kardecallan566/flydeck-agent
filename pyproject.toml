@@ -30,6 +30,7 @@ flydeck-diagnose = "flydeck.forward_diagnostics_cli:main"
 flydeck-investigate = "flydeck.investigate_cli:main"
 flydeck-fill-gap = "flydeck.forward_gap_cli:main"
 flydeck-earn-plan = "flydeck.earn_planner_cli:main"
+flydeck-seal-merge = "flydeck.sealed_collect_cli:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
