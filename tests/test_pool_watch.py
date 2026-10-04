@@ -92,7 +92,7 @@ def test_synthetic_offline_cli_labels_example_as_fiction(tmp_path, monkeypatch):
         "--out-dir", str(output),
     ])
     assert main() == 0
-    report = json.loads((output / "report.json").read_text(encoding="utf-8"), encoding="utf-8")
+    report = json.loads((output / "report.json").read_text(encoding="utf-8"))
     assert report["synthetic_fixture_only"] is True
     assert report["input_mode"] == "offline_snapshot"
     assert report["matching_pools"] == 1
