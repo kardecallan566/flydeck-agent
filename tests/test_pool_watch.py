@@ -45,7 +45,7 @@ def test_export_html_escapes_provider_text(tmp_path):
     assert (root / "report.html").exists()
     with (root / "pools.csv").open(encoding="utf-8-sig", newline="") as stream:
         assert len(list(csv.DictReader(stream))) == 3
-    assert json.loads((root / "report.json").read_text())["research_only"]
+    assert json.loads((root / "report.json").read_text(encoding="utf-8"))["research_only"]
     with pytest.raises(FileExistsError):
         export(report, root)
 
@@ -92,7 +92,7 @@ def test_synthetic_offline_cli_labels_example_as_fiction(tmp_path, monkeypatch):
         "--out-dir", str(output),
     ])
     assert main() == 0
-    report = json.loads((output / "report.json").read_text(encoding="utf-8"))
+    report = json.loads((output / "report.json").read_text(encoding="utf-8"), encoding="utf-8")
     assert report["synthetic_fixture_only"] is True
     assert report["input_mode"] == "offline_snapshot"
     assert report["matching_pools"] == 1
