@@ -264,3 +264,4 @@ footer p{max-width:950px}
 .cards{grid-template-columns:minmax(0,1fr)}.sectionheading{display:block}
 .changebanner{display:block}.changebanner span:last-child{display:block;margin-top:8px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+"""
