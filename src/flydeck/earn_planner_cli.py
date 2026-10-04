@@ -135,7 +135,11 @@ def main() -> int:
     bet.add_argument("--gross-payout", type=float, required=True)
     bet.add_argument("--treasury-fraction", type=float, default=.03)
     bet.add_argument("--gas-fraction-of-stake", type=float, default=0)
-    p.add_argument("--output", type=Path, help="Write unique JSON report (refuses overwriting)")
+    for command in (lp, bet):
+        command.add_argument(
+            "--output", type=Path,
+            help="Write unique JSON report (refuses overwriting)",
+        )
     args = p.parse_args()
     try:
         if args.mode == "lp":
