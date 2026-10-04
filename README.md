@@ -186,6 +186,10 @@ The FlyDeck Agent is not currently intended to:
 - Prefer structural explanations over blind parameter searches.
 - Keep memory, compute and dependencies small.
 
+## Pool Watch v2 — visual budget report and historical pool alerts
+
+[Pool Watch v2 manual](docs/POOL_WATCH_V2.md) documents the redesigned responsive HTML with cost-first conclusions, V2/V3 separation and explanatory cards. Use the new `--previous` option to compare two public snapshots and generate `changes.html`, `changes.csv` and `changes.json` for APY/TVL movements. Old top-N reports are explicitly marked as incomplete comparisons. No wallet, live earnings, guaranteed APR or background monitoring.
+
 ## Pool Watch — public pool screening for US$ 5–20
 
 `flydeck-pool-watch` produces a static HTML report, CSV and JSON from
