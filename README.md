@@ -186,6 +186,14 @@ The FlyDeck Agent is not currently intended to:
 - Prefer structural explanations over blind parameter searches.
 - Keep memory, compute and dependencies small.
 
+## PancakeSwap economics and dedicated sealed holdout collection
+
+[Income and research workflow](docs/EARN_AND_SEALED.md):
+offline V2 liquidity-vs-HOLD comparison, risk/cost sensitivity,
+Prediction break-even without bets, and a separate SHA-256-chained
+incremental collector that NEVER scores the prospective 2000-candle
+dataset. No wallet, real trades, guaranteed APR or live-profit claims.
+
 ## Experimental v4 — historical drift audit and opt-in balanced learning
 
 The [v4 experimental guide](docs/EXPERIMENTAL_V4.md) shows how to:
