@@ -52,6 +52,33 @@ def _card(pool: dict, needed: float, cost: float, *, days: int) -> str:
     )
     token = esc(pool["symbol"])
     warnings = "".join("<li>" + esc(w) + "</li>" for w in pool["warnings"])
+    scenario = pool.get("stress_test")
+    if scenario and not v3:
+        scenario_rows = "".join(
+            "<tr><th scope='row'>" +
+            esc(f"{row['token_a_price_change_pct']:+.0f}%") +
+            "</th><td>" + esc(_money(row["hold_50_50_usd"])) +
+            "</td><td>" + esc(_money(row["net_lp_usd"])) +
+            "</td><td>" + esc(_money(row["lp_minus_hold_usd"])) +
+            "</td></tr>"
+            for row in scenario["rows"]
+        )
+        stress_html = (
+            '<div class="stress"><strong>Cenários hipotéticos de preço — V2 50/50</strong>'
+            '<p>Apenas um token varia; o outro permanece com preço fixo '
+            'e a receita bruta hipotética é mantida em dólares. '
+            'Isto NÃO é previsão nem simula V3.</p>'
+            '<div class="stressscroll"><table><thead><tr>'
+            '<th>Variação do token A</th><th>Manter tokens</th>'
+            '<th>LP após custos</th><th>LP menos manter</th>'
+            '</tr></thead><tbody>' + scenario_rows +
+            '</tbody></table></div></div>'
+        )
+    else:
+        stress_html = (
+            '<p>Não há teste de variação de preços para V3: '
+            'o desempenho depende da faixa pessoal escolhida.</p>'
+        )
     ref = esc(pool["pool_url"])
     return (
         '<article class="pool '+state+'">'
@@ -73,7 +100,8 @@ def _card(pool: dict, needed: float, cost: float, *, days: int) -> str:
         '<div class="track" role="img" aria-label="APY relativo ao mínimo para custos">'
         '<div class="fill" style="width:'+esc(f"{share:.1f}")+'%"></div></div>'
         '<p class="notice">' + esc(note) + '</p>'
-        '<details><summary>Riscos e dados da fonte</summary><ul>'+warnings+'</ul>'
+        '<details><summary>Riscos, cenários e dados da fonte</summary><ul>'+warnings+'</ul>'
+        +stress_html+
         '<p><a href="'+ref+'" target="_blank" rel="noopener noreferrer">'
         'Consultar agregador ↗</a></p>'
         '<p><a href="https://pancakeswap.finance/liquidity/pools" '
@@ -153,7 +181,8 @@ def render(report: dict) -> str:
             '<a class="changebanner" href="changes.html"><span>'
             '<strong>Comparação com a consulta anterior</strong><br>'
             +esc(n)+' alterações merecem atenção · '+
-            esc(monitoring["information_count"])+' informativas</span>'
+            esc(monitoring["information_count"])+' informativas · '+
+            esc(monitoring.get("minor_changes", 0))+' oscilações menores</span>'
             '<span>Consultar mudanças ↗</span></a>'
         )
     styles = StringStyles
@@ -252,6 +281,13 @@ font-variant-numeric:tabular-nums;font-weight:850;letter-spacing:-.025em;margin:
 .track{height:6px;background:#31495a;border-radius:20px;overflow:hidden;margin:8px 0 15px}
 .fill{height:100%;border-radius:20px;background:var(--mint)}
 .notice{font-size:12px;color:#d2dee3;margin:0 0 15px;line-height:1.6}
+.stress{margin:18px 0 14px}.stress>strong{font-size:12px;display:block}
+.stress p{font-size:11px;color:var(--muted);line-height:1.5}
+.stressscroll{max-width:100%;overflow-x:auto}.stress table{border-collapse:collapse;
+width:100%;min-width:350px;font-variant-numeric:tabular-nums}
+.stress th,.stress td{padding:7px 5px;border-bottom:1px solid #395367;
+font-size:10px;text-align:right}.stress th:first-child{text-align:left}
+.stress thead th{color:#b8d8dd;white-space:nowrap}
 details{margin-top:auto;border-top:1px solid #355063;padding-top:13px}
 summary{cursor:pointer;color:var(--mint);font-size:13px;font-weight:700}
 details li{color:#c6d5dd;margin:9px 0;font-size:12px}
