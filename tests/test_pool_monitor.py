@@ -124,7 +124,7 @@ def test_cli_offline_snapshot_and_previous_report(tmp_path, monkeypatch):
     earlier.write_text(json.dumps({"status": "success", "synthetic_fixture_only": True,
                                    "data": [pool("x", "USDT-USDC", 10, 500000)]}),
                        encoding="utf-8")
-    old = analyze(json.loads(earlier.read_text()), budget=20, allocation=10, cost=.6)
+    old = analyze(json.loads(earlier.read_text(encoding="utf-8")), budget=20, allocation=10, cost=.6)
     old["collected_utc"] = "2026-09-01T00:00:00+00:00"
     old_path = tmp_path / "old-report.json"
     old_path.write_text(json.dumps(old), encoding="utf-8")
@@ -141,5 +141,5 @@ def test_cli_offline_snapshot_and_previous_report(tmp_path, monkeypatch):
     ])
     assert main() == 0
     assert (out / "changes.html").exists()
-    assert "DEMONSTRAÇÃO: DADOS INVENTADOS" in (out / "report.html").read_text()
-    assert json.loads((out / "changes.json").read_text())["attention_count"] == 2
+    assert "DEMONSTRAÇÃO: DADOS INVENTADOS" in (out / "report.html").read_text(encoding="utf-8")
+    assert json.loads((out / "changes.json").read_text(encoding="utf-8"))["attention_count"] == 2
