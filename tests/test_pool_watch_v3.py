@@ -114,4 +114,4 @@ def test_reports_include_stress_csv_and_comparison_banner(tmp_path):
     assert "oscilações menores" in html
     assert "Manter tokens" in html
     assert (root / "changes.json").exists()
-    assert json.loads((root / "report.json").read_text())["stress_shock_pct"] == 30
+    assert json.loads((root / "report.json").read_text(encoding="utf-8"))["stress_shock_pct"] == 30
