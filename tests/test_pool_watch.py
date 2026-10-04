@@ -74,3 +74,31 @@ def test_invalid_or_malicious_feed():
         item("nan", "x-y", float("nan")),
         item("clean", "USDC-DAI", 12), item("clean", "USDC-DAI", 12),
     ]})["matching_pools"] == 1
+
+
+def test_synthetic_offline_cli_labels_example_as_fiction(tmp_path, monkeypatch):
+    import sys
+    from flydeck.pool_watch_cli import main
+    source = tmp_path / "synthetic.json"
+    source.write_text(json.dumps({
+        "status": "success", "synthetic_fixture_only": True,
+        "data": [item("demo", "USDT-USDC", 10)],
+    }), encoding="utf-8")
+    output = tmp_path / "html"
+    monkeypatch.setattr(sys, "argv", [
+        "flydeck-pool-watch", "--snapshot", str(source),
+        "--budget-usd", "20", "--allocation-usd", "10",
+        "--roundtrip-cost-usd", "0.6", "--days", "30",
+        "--out-dir", str(output),
+    ])
+    assert main() == 0
+    report = json.loads((output / "report.json").read_text(encoding="utf-8"))
+    assert report["synthetic_fixture_only"] is True
+    assert report["input_mode"] == "offline_snapshot"
+    assert report["matching_pools"] == 1
+    assert "DEMONSTRAÇÃO: DADOS INVENTADOS" in (
+        output / "report.html"
+    ).read_text(encoding="utf-8")
+    with pytest.raises(SystemExit) as failed:
+        main()
+    assert failed.value.code == 2
